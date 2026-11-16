@@ -8,7 +8,7 @@ Sangerシーケンスの波形ファイル（.ab1）を、ブラウザだけで�
 
 ## 使う
 
-- オンライン: （GitHub Pages のURLをここに記入）
+- オンライン: https://mkameya.github.io/sanger-assembler/
 - オフライン: `index.html` をダウンロードして Chrome / Edge で開く。
 
 読み込んだ配列はブラウザの中だけで処理され、外部には送信されません。
