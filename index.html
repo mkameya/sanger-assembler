@@ -1,0 +1,1440 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>Sanger Assembler</title>
+<style>
+*{box-sizing:border-box}
+html,body{height:100%;margin:0;font-family:"Segoe UI","Yu Gothic UI",sans-serif;font-size:13px;color:#222;background:#fff}
+body{display:flex;flex-direction:column;overflow:hidden}
+#tb{display:flex;flex-wrap:wrap;gap:4px 10px;align-items:center;padding:5px 8px;background:#f1f3f5;border-bottom:1px solid #c9ced3}
+#tb .grp{display:flex;gap:3px;align-items:center;padding-right:10px;border-right:1px solid #d5d9dd}
+#tb .grp:last-child{border-right:none}
+#tb label{font-size:12px;color:#444}
+button{font:inherit;padding:3px 8px;border:1px solid #aab;border-radius:3px;background:#fff;cursor:pointer}
+button:hover{background:#e7f0ff}
+button:disabled{color:#aaa;cursor:default;background:#f6f6f6}
+button.on{background:#cfe2ff;border-color:#5b8def}
+select,input[type=number]{font:inherit;padding:2px}
+input[type=number]{width:52px}
+#main{flex:1;display:flex;flex-direction:column;min-height:0}
+#seqPane{display:flex;height:42%;min-height:60px}
+#names{width:var(--nw,230px);flex:none;overflow:hidden;background:#fafafa;user-select:none}
+#nmSplit{width:5px;flex:none;cursor:col-resize;background:#dde1e6;border-left:1px solid #c9ced3;border-right:1px solid #c9ced3}
+#nmSplit:hover,#nmSplit.drag{background:#8fbcff}
+.nm{height:20px;line-height:20px;padding:0 6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:12px;cursor:default;border-top:2px solid transparent;border-bottom:2px solid transparent}
+.nm.cons{font-weight:bold;background:#ece7d6}
+.nm.hdr{font-weight:bold;background:#e3e6ea;color:#555}
+.nm.read{padding-left:10px}
+.dir{display:inline-block;width:15px;font-size:10px}
+.dir.f{color:#1c6fd1}
+.dir.c{color:#d9480f}
+.nm.sel{background:#bcd6ff}
+.nm.dropB{border-top-color:#d33}
+.nm.dropA{border-bottom-color:#d33}
+#seqView,#trPane{position:relative;flex:1;min-width:0;overflow:hidden}
+#seqView canvas,#trPane canvas{position:absolute;left:0;top:0}
+.ov{position:absolute;inset:0;overflow:auto}
+#trScroll{overflow-x:hidden;overflow-y:scroll}
+#split{height:6px;flex:none;background:#c9ced3;cursor:row-resize}
+#trPane{min-height:60px}
+#trBar{flex:none;padding:1px 6px;background:#f1f3f5;border-top:1px solid #c9ced3;display:flex;gap:6px;align-items:center;font-size:12px}
+#trSlider{flex:1}
+#status{flex:none;padding:3px 8px;background:#e9ecef;border-top:1px solid #c9ced3;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#drop{position:fixed;inset:0;background:rgba(60,110,220,.25);border:4px dashed #36c;display:none;align-items:center;justify-content:center;font-size:28px;color:#124;pointer-events:none;z-index:10}
+#help{position:fixed;right:10px;top:70px;width:470px;max-height:80%;overflow:auto;background:#fff;border:1px solid #889;box-shadow:0 4px 16px rgba(0,0,0,.3);padding:10px 14px;display:none;z-index:20;font-size:12px;line-height:1.6}
+#help h3{margin:6px 0 2px;font-size:13px}
+#help kbd{background:#eee;border:1px solid #bbb;border-radius:3px;padding:0 4px;font-family:Consolas,monospace}
+#ovwWrap{display:none;flex:none;border-bottom:1px solid #c9ced3;background:#fafafa}
+#ovwSide{width:calc(var(--nw,230px) + 5px);flex:none;display:flex;align-items:center;gap:4px;padding:2px 6px;font-size:11px;line-height:1.4;color:#555;border-right:1px solid #c9ced3;overflow:hidden}
+#ovwName{flex:1;min-width:0;overflow:hidden}
+#bOvwSvg{flex:none;font-size:11px;padding:0 5px}
+#ovwBox{flex:1;position:relative;min-width:0;cursor:pointer}
+#ovwBox canvas{position:absolute;left:0;top:0}
+#empty{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#889;font-size:16px;pointer-events:none}
+</style>
+</head>
+<body>
+<div id="tb">
+  <div class="grp">
+    <button id="bOpen" title="ab1 / FASTA / プロジェクト(.json) を開く">開く</button>
+    <button id="bSave" title="作業状況を保存 (Ctrl+S)">Project保存</button>
+    <button id="bClose" title="選択した配列を一覧から削除（元のファイルは消えません。Ctrl+Zで戻せます）">配列を閉じる</button>
+    <input type="file" id="fIn" multiple style="display:none" accept=".ab1,.abi,.fasta,.fa,.fna,.fas,.ffn,.seq,.txt,.json">
+  </div>
+  <div class="grp">
+    <button id="bAsm" title="行を未選択なら全配列、選択中なら選択配列のみ">Assemble</button>
+    <label>基準</label>
+    <select id="preset"><option value="strict">厳しい</option><option value="normal" selected>標準</option><option value="loose">緩い</option><option value="custom">Custom</option></select>
+    <label>重なり≥</label><input type="number" id="minOv" min="10" max="500" value="30">
+    <label>一致率≥</label><input type="number" id="minId" min="50" max="100" value="92"><label>%</label>
+    <button id="bCons" title="コンティグ構造はそのままでコンセンサスを再計算（選択コンティグ、未選択なら全コンティグ）">Consensus更新</button>
+    <button id="bUnasm" title="選択した配列をコンティグから外す（コンティグ行を選択した場合は解体）">Contigから外す</button>
+  </div>
+  <div class="grp">
+    <button id="bUndo" title="Ctrl+Z">元に戻す</button>
+    <button id="bRedo" title="Ctrl+Y">やり直し</button>
+    <label>入力</label>
+    <button id="mRep" class="on" title="選択塩基を置換">置換</button>
+    <button id="mIns" title="選択塩基の前に挿入（Shift+塩基キーなら選択塩基の後ろに挿入）。Insertキーで置換と切り替え">挿入</button>
+    <button id="mAln" title="アラインメントの手動調整。塩基は変えず、選択した配列だけを左右にずらす（ブロック選択なら複数配列を同時に）。- または Space＝選択塩基の前にギャップを入れる（以降が右へ）／Delete・BackSpace＝選択塩基の直前のギャップを詰める（以降が左へ）">位置調整</button>
+  </div>
+  <div class="grp">
+    <button id="bRC" title="選択した配列（コンティグ内なら当該コンティグ全体）を相補鎖にする（相補鎖を5'→3'方向で表示。波形も左右反転）">相補鎖</button>
+    <button id="bTrimL" title="選択塩基より左をトリム(アセンブル・コンセンサスから除外)">◀Trim</button>
+    <button id="bTrimR" title="選択塩基より右をトリム">Trim▶</button>
+    <button id="bTrimA" title="選択した配列のトリム範囲を、品質値から自動判定した範囲（読み込み時と同じ）に戻す">自動Trim</button>
+    <button id="bTrim0" title="選択した配列のトリムをやめ、全長を有効にする">Trim解除</button>
+  </div>
+  <div class="grp">
+    <button id="bCopy" title="選択行の配列をクリップボードにコピー (Ctrl+C)。1行なら配列のみ、複数行はFASTA形式。行未選択なら選択中の塩基範囲">Copy</button>
+    <button id="bFasta" title="選択行（配列・コンセンサス）をFASTAで保存。未選択なら全コンセンサス（なければ全配列）">FASTA書き出し</button>
+    <label title="FASTA書き出し時に、トリムした低品質末端を除く"><input type="checkbox" id="ckTrim" checked>Trim部除く</label>
+    <button id="bAb1" title="選択した配列を編集内容を反映した .ab1 として別名保存">AB1書き出し</button>
+  </div>
+  <div class="grp">
+    <label>塩基幅</label><button data-z="cw-">−</button><button data-z="cw+">＋</button>
+    <label>波形 横</label><button data-z="zx-">−</button><button data-z="zx+">＋</button>
+    <label>縦</label><button data-z="amp-">−</button><button data-z="amp+">＋</button>
+    <label>高さ</label><button data-z="ph-">−</button><button data-z="ph+">＋</button>
+    <input type="text" id="q" placeholder="配列を検索 (Ctrl+F)" style="width:140px;font:inherit;padding:2px" title="塩基配列を入力して Enter で次、Shift+Enter で前を検索。全配列とコンセンサスが対象。相補鎖側の一致も探す。R, Y, N などのあいまい文字も使用可">
+    <button id="bFindP" title="前を検索 (Shift+Enter)">◀</button><button id="bFindN" title="次を検索 (Enter)">▶</button>
+    <button id="bHelp">？</button>
+  </div>
+</div>
+<div id="main">
+  <div id="ovwWrap" title="コンティグ全長の概観。赤=コンセンサスと不一致、橙=コンセンサスのあいまい塩基、薄青=配列表示の表示範囲。クリックでその位置へ移動"><div id="ovwSide"><div id="ovwName"></div><button id="bOvwSvg" title="この概観図をSVGファイルに保存（配列名・向き・目盛り・凡例付き）">SVG保存</button></div><div id="ovwBox"><canvas id="ovw"></canvas></div></div>
+  <div id="seqPane">
+    <div id="names"></div>
+    <div id="nmSplit" title="ドラッグで配列名の幅を変更（ダブルクリックで元の幅）"></div>
+    <div id="seqView"><canvas id="seqCv"></canvas><div class="ov" id="seqScroll"><div id="seqSp"></div></div>
+      <div id="empty">.ab1 / FASTA / プロジェクト(.json) ファイルをここにドラッグ＆ドロップ、または「開く」</div></div>
+  </div>
+  <div id="split"></div>
+  <div id="trPane"><canvas id="trCv"></canvas><div class="ov" id="trScroll"><div id="trSp"></div></div></div>
+  <div id="trBar"><span id="trLabel">波形位置</span><input type="range" id="trSlider" min="0" max="100" step="0.1" value="0"></div>
+</div>
+<div id="status">準備完了</div>
+<div id="drop">ここにドロップして開く</div>
+<div id="help">
+  <h3>選択</h3>
+  配列名クリックで行選択（<kbd>Ctrl</kbd>/<kbd>Shift</kbd>で複数）。配列名をドラッグで順番入れ替え（同じコンティグ内／未結合内、コンティグ行はコンティグ同士）。<br>
+  塩基クリックで塩基選択（ドラッグ／<kbd>Shift</kbd>+クリックで範囲）。<kbd>←</kbd><kbd>→</kbd>で移動、<kbd>Shift</kbd>で範囲拡張、<kbd>↑</kbd><kbd>↓</kbd>で隣の行、<kbd>Home</kbd>/<kbd>End</kbd>。<kbd>Esc</kbd>で選択解除。
+  <b>ブロック選択</b>：コンティグ内で塩基をクリックし、別の行までドラッグ（または別の行を<kbd>Shift</kbd>+クリック）すると、複数行×同じカラム範囲を選択。<kbd>Delete</kbd>で一括削除、塩基キーで一括置換、<kbd>Ctrl+C</kbd>でFASTAコピー。
+  <h3>編集</h3>
+  塩基選択中に <kbd>A</kbd><kbd>C</kbd><kbd>G</kbd><kbd>T</kbd><kbd>N</kbd>（IUPAC文字も可）で置換／挿入（<kbd>Insert</kbd>で置換⇔挿入を切替）。配列内部のギャップ（-）もクリックで選択でき、塩基キーでそのカラムに塩基が入る（置換・挿入どちらのモードでも同じ）。挿入は選択塩基の前に入る。<kbd>Shift</kbd>+塩基キーなら後ろに入る（末尾への追加用）。<kbd>Delete</kbd>/<kbd>BackSpace</kbd>/<kbd>-</kbd> で選択範囲を削除（コンティグ内ではアラインメントを保ったままギャップになる）。<br>
+  <b>位置調整</b>（アラインメントの手動調整）：「位置調整」モードでは塩基は変わらず、選択した配列だけが動く。<kbd>-</kbd>/<kbd>Space</kbd>＝選択塩基の前にギャップを入れる（その配列の以降が右へ1カラム）、<kbd>Delete</kbd>/<kbd>BackSpace</kbd>＝選択塩基の直前のギャップを詰める（以降が左へ1カラム）。ギャップを別の位置へ移すには、元の位置で詰めてから移したい位置で入れる。配列の先頭塩基で行うと配列全体が左右に動く。このモードでは選択は位置（1カラム）だけで、ギャップが入る位置を紫の縦線で示す。別の行まで縦にドラッグ（または<kbd>Shift</kbd>+クリック）すると間の配列をまとめて、<kbd>Ctrl</kbd>+クリックで離れた配列を1本ずつ追加／解除して、複数配列を同時に動かせる（詰めるギャップがない配列はそのまま）。<br>
+  挿入モードでは、塩基が入る位置を緑の縦線で示す（<kbd>Shift</kbd>を押している間は後ろ側）。<br>
+  コンセンサス行の塩基は置換のみ可能。配列の編集は該当カラムのコンセンサスに自動反映、全体の再計算は「Consensus更新」。<br>
+  <kbd>Ctrl+C</kbd> コピー（コンセンサス名や配列名をクリックして行選択→1行なら配列のみ、複数行はFASTA。行未選択なら選択中の塩基範囲）。<br>
+  <kbd>Ctrl+Z</kbd> 元に戻す／<kbd>Ctrl+Y</kbd> やり直し／<kbd>Ctrl+S</kbd> プロジェクト保存。
+  <h3>波形</h3>
+  ホイール=縦スクロール、<kbd>Shift</kbd>+ホイール=横スクロール、<kbd>Ctrl</kbd>+ホイール=横ズーム、<kbd>Alt</kbd>+ホイール=縦(振幅)ズーム。下のスライダーで選択中グループ（コンティグは全リード連動）を横移動。
+  <h3>検索・配列の追加</h3>
+  <kbd>Ctrl+F</kbd> で検索欄へ。塩基配列を入力して <kbd>Enter</kbd> で次、<kbd>Shift+Enter</kbd> で前の一致へ移動（全配列とコンセンサスが対象、相補鎖側の一致も検索、R・Y・N などのあいまい文字可）。<br>
+  配列はいつでも追加で開けます（未結合に入る）。既存コンティグへ加えるには、追加した配列とコンティグ行を選択してアセンブル。
+  <h3>概観（不一致マップ）</h3>
+  コンティグがあると最上段に全長の概観を表示（最後に操作したコンティグ）。各配列の帯の上の赤い線がコンセンサスとの不一致、コンセンサス帯の橙があいまい塩基。クリックすると配列表示・波形表示がその位置へ移動（赤線の近くをクリックするとその塩基を選択）。「SVG保存」で、配列名・目盛り・凡例付きの図として保存。
+  <h3>表示</h3>
+  配列名の前の <span style="color:#1c6fd1">▶</span>=読み込み時の向き、<span style="color:#d9480f">◀</span>=相補鎖にした配列。FASTA由来の配列（波形なし）は波形エリアに表示しません。<br>
+  赤背景=コンセンサスと不一致、黄背景=Q&lt;20、灰色文字=トリム部（アセンブルとコンセンサスに不使用）、下線=手動編集した塩基。
+  <h3>保存</h3>
+  プロジェクト(.json)は元の.ab1データを内包するので、1ファイルで再開できます。AB1書き出しは PBAS/PLOC/PCON（相補鎖にした配列は波形も）を書き換えた別名ファイルを作ります。
+  <h3>データの扱いと免責</h3>
+  読み込んだ配列はこのブラウザの中だけで処理され、外部には送信されません。本ツールは無保証です。アセンブルやコンセンサスの結果は、必ず波形と照らして確認してください。
+</div>
+
+<script id="core">
+/* ===================== core (DOM非依存) ===================== */
+const SA = (function () {
+'use strict';
+const COMP = {A:'T',T:'A',G:'C',C:'G',N:'N',R:'Y',Y:'R',K:'M',M:'K',S:'S',W:'W',B:'V',V:'B',D:'H',H:'D'};
+const IUPAC = 'ACGTNRYKMSWBDHV';
+const IUPAC2 = {3:'M',5:'R',9:'W',6:'S',10:'Y',12:'K'};
+const BASES = 'ACGT';
+const EDIT_Q = 60, K = 8, SP = 12;
+let uid = 1;
+function newId(p) { return p + (uid++); }
+
+function revcompStr(s) { let o = ''; for (let i = s.length - 1; i >= 0; i--) { const c = s[i]; o += COMP[c] || c; } return o; }
+function lowerBound(a, v) { let lo = 0, hi = a.length; while (lo < hi) { const m = (lo + hi) >> 1; if (a[m] < v) lo = m + 1; else hi = m; } return lo; }
+function colOf(r, i) { return r.cols ? r.cols[i] : i; }
+function idxAtCol(r, c) { if (!r.cols) return (c >= 0 && c < r.seq.length) ? c : -1; const i = lowerBound(r.cols, c); return (i < r.cols.length && r.cols[i] === c) ? i : -1; }
+function nearestIdx(r, c) {
+  const n = r.seq.length; if (!r.cols) return Math.max(0, Math.min(n - 1, c));
+  let i = lowerBound(r.cols, c); if (i >= n) return n - 1; if (i > 0 && c - r.cols[i - 1] < r.cols[i] - c) i--; return i;
+}
+function sampleAtCol(r, c) {
+  const n = r.seq.length; if (!n) return 0;
+  const sp = r.tn / n, cols = r.cols, c0 = cols ? cols[0] : 0, cN = cols ? cols[n - 1] : n - 1;
+  if (c <= c0) return r.pos[0] + (c - c0) * sp;
+  if (c >= cN) return r.pos[n - 1] + (c - cN) * sp;
+  const i = cols ? lowerBound(cols, Math.floor(c) + 1) - 1 : Math.floor(c);
+  const ca = cols ? cols[i] : i, cb = cols ? cols[i + 1] : i + 1;
+  return r.pos[i] + (c - ca) / (cb - ca) * (r.pos[i + 1] - r.pos[i]);
+}
+
+/* ---------- ABIF ---------- */
+function ascii(u8, o, n) { let s = ''; for (let i = 0; i < n; i++) s += String.fromCharCode(u8[o + i]); return s; }
+function parseAbif(u8) {
+  let base = 0;
+  if (ascii(u8, 0, 4) !== 'ABIF') { if (u8.length > 132 && ascii(u8, 128, 4) === 'ABIF') base = 128; else throw new Error('ABIF形式ではありません'); }
+  const dv = new DataView(u8.buffer, u8.byteOffset, u8.byteLength);
+  const num = dv.getInt32(base + 18), dirOff = dv.getInt32(base + 26);
+  const entries = [];
+  for (let i = 0; i < num; i++) {
+    const o = base + dirOff + i * 28;
+    if (o + 28 > u8.length) break;
+    const e = { name: ascii(u8, o, 4), num: dv.getInt32(o + 4), etype: dv.getInt16(o + 8), esize: dv.getInt16(o + 10), n: dv.getInt32(o + 12), dsize: dv.getInt32(o + 16) };
+    const off = e.dsize <= 4 ? o + 20 : base + dv.getInt32(o + 20);
+    if (e.dsize < 0 || off + e.dsize > u8.length) continue;
+    e.data = u8.subarray(off, off + e.dsize);
+    entries.push(e);
+  }
+  return { version: dv.getInt16(base + 4), entries, get(name, n) { return entries.find(e => e.name === name && e.num === n); } };
+}
+function be16(e, unsigned) {
+  const dv = new DataView(e.data.buffer, e.data.byteOffset, e.data.byteLength), n = e.data.length >> 1;
+  const a = unsigned ? new Float32Array(n) : new Int16Array(n);
+  for (let i = 0; i < n; i++) a[i] = unsigned ? dv.getUint16(i * 2) : dv.getInt16(i * 2);
+  return a;
+}
+function tracesFromAbif(ab) {
+  const fwo = ab.get('FWO_', 1), order = fwo ? ascii(fwo.data, 0, 4) : 'GATC';
+  const tr = { order }; let n = Infinity;
+  for (let k = 0; k < 4; k++) { const e = ab.get('DATA', 9 + k); if (!e) return null; tr[order[k]] = be16(e, false); n = Math.min(n, tr[order[k]].length); }
+  if (!tr.A || !tr.C || !tr.G || !tr.T || !n) return null;
+  tr.n = n;
+  const m = new Float32Array(n);
+  for (let i = 0; i < n; i++) m[i] = Math.max(tr.A[i], tr.C[i], tr.G[i], tr.T[i]);
+  m.sort(); tr.ymax = Math.max(50, m[Math.floor(0.995 * (n - 1))]);
+  return tr;
+}
+function traces(r) {
+  const t = r.tr; if (!t) return null; if (!r.rc) return t;
+  if (!t.rcv) { const rv = a => a.slice(0, t.n).reverse(); t.rcv = { A: rv(t.T), T: rv(t.A), C: rv(t.G), G: rv(t.C), n: t.n, ymax: t.ymax }; }
+  return t.rcv;
+}
+function makeRead(o) {
+  const n = o.seq.length;
+  return { id: newId('r'), name: o.name, file: o.file || '', kind: o.kind, rc: false, seq: o.seq, qual: o.qual, pos: o.pos, ed: new Uint8Array(n),
+    clipL: 0, clipR: 0, cols: null, contig: null, tr: o.tr || null, tn: o.tr ? o.tr.n : Math.max(1, n) * SP, ab1: o.ab1 || null };
+}
+function readFromAbif(u8, fileName) {
+  const ab = parseAbif(u8);
+  const k = ab.get('PBAS', 1) ? 1 : 2;
+  const pb = ab.get('PBAS', k); if (!pb) throw new Error('塩基配列(PBAS)がありません');
+  const pl = ab.get('PLOC', k) || ab.get('PLOC', 3 - k), pc = ab.get('PCON', k) || ab.get('PCON', 3 - k);
+  const tr = tracesFromAbif(ab);
+  const ploc = pl ? be16(pl, true) : null;
+  let n = pb.data.length; if (ploc) n = Math.min(n, ploc.length);
+  let seq = ''; const qual = new Uint8Array(n), pos = new Float32Array(n);
+  for (let i = 0; i < n; i++) {
+    const ch = String.fromCharCode(pb.data[i]).toUpperCase(); seq += IUPAC.includes(ch) ? ch : 'N';
+    qual[i] = pc && i < pc.data.length ? Math.min(93, pc.data[i]) : 20;
+    pos[i] = ploc ? ploc[i] : i * SP + 6;
+  }
+  for (let i = 1; i < n; i++) if (pos[i] < pos[i - 1]) pos[i] = pos[i - 1];
+  const r = makeRead({ name: fileName.replace(/\.[^.]+$/, ''), file: fileName, kind: 'ab1', seq, qual, pos, tr, ab1: u8 });
+  autoTrim(r);
+  return r;
+}
+function parseFasta(text, fileName) {
+  const out = []; let name = null, buf = [];
+  const flush = () => {
+    if (name === null) return; const raw = buf.join('').toUpperCase(); let seq = '';
+    for (const ch of raw) { if (IUPAC.includes(ch)) seq += ch; else if (ch === 'U') seq += 'T'; else if (/[A-Z]/.test(ch)) seq += 'N'; }
+    if (!seq) return; const n = seq.length, pos = new Float32Array(n);
+    for (let i = 0; i < n; i++) pos[i] = i * SP + 6;
+    out.push(makeRead({ name: name || fileName, file: fileName, kind: 'fasta', seq, qual: new Uint8Array(n).fill(20), pos }));
+  };
+  for (const line of text.split(/\r?\n/)) {
+    if (line[0] === '>') { flush(); name = line.slice(1).trim().split(/\s+/)[0] || fileName; buf = []; }
+    else if (name !== null) buf.push(line.trim());
+  }
+  flush(); return out;
+}
+/* Mott法トリミング: [start,end) を返す */
+function mottRange(qual, cutoff) {
+  let sum = 0, best = 0, st = 0, bs = 0, be = 0;
+  for (let i = 0; i < qual.length; i++) {
+    sum += cutoff - Math.pow(10, -qual[i] / 10);
+    if (sum < 0) { sum = 0; st = i + 1; }
+    if (sum > best) { best = sum; bs = st; be = i + 1; }
+  }
+  return [bs, be];
+}
+function autoTrim(r) {
+  const n = r.seq.length; r.clipL = 0; r.clipR = 0;
+  if (r.kind !== 'ab1') return;
+  const [s, e] = mottRange(r.qual, 0.05);
+  if (e - s >= 20) { r.clipL = s; r.clipR = n - e; }
+}
+function rcRead(r) {
+  const n = r.seq.length, p = new Float32Array(n);
+  for (let i = 0; i < n; i++) p[i] = r.tn - 1 - r.pos[n - 1 - i];
+  r.seq = revcompStr(r.seq); r.qual = r.qual.slice().reverse(); r.ed = r.ed.slice().reverse(); r.pos = p;
+  const t = r.clipL; r.clipL = r.clipR; r.clipR = t; r.rc = !r.rc;
+}
+function mirrorCols(r, width) { const n = r.cols.length, c = new Int32Array(n); for (let i = 0; i < n; i++) c[i] = width - 1 - r.cols[n - 1 - i]; r.cols = c; }
+function writeAbif(ab, repl) {
+  const map = new Map(ab.entries.map(e => [e.name + ':' + e.num, e]));
+  for (const [k, v] of repl) { const [name, num] = k.split(':'); map.set(k, { name, num: +num, etype: v.etype, esize: v.esize, n: v.n, dsize: v.data.length, data: v.data }); }
+  const es = [...map.values()].sort((a, b) => a.name < b.name ? -1 : a.name > b.name ? 1 : a.num - b.num);
+  let dbytes = 0; for (const e of es) if (e.dsize > 4) dbytes += e.dsize;
+  const out = new Uint8Array(128 + dbytes + es.length * 28), dv = new DataView(out.buffer);
+  const put = (o, s) => { for (let i = 0; i < s.length; i++) out[o + i] = s.charCodeAt(i); };
+  put(0, 'ABIF'); dv.setInt16(4, ab.version || 0x0101); put(6, 'tdir'); dv.setInt32(10, 1); dv.setInt16(14, 1023); dv.setInt16(16, 28);
+  dv.setInt32(18, es.length); dv.setInt32(22, es.length * 28); dv.setInt32(26, 128 + dbytes);
+  let off = 128, d = 128 + dbytes;
+  for (const e of es) {
+    put(d, e.name); dv.setInt32(d + 4, e.num); dv.setInt16(d + 8, e.etype); dv.setInt16(d + 10, e.esize); dv.setInt32(d + 12, e.n); dv.setInt32(d + 16, e.dsize);
+    if (e.dsize > 4) { out.set(e.data, off); dv.setInt32(d + 20, off); off += e.dsize; } else out.set(e.data, d + 20);
+    d += 28;
+  }
+  return out;
+}
+/* 編集内容を反映した .ab1 を作る */
+function exportAb1(r) {
+  if (!r.ab1) throw new Error('元の.ab1データがありません');
+  const ab = parseAbif(r.ab1), n = r.seq.length, repl = new Map();
+  const pb = new Uint8Array(n), pc = new Uint8Array(n), pl = new Uint8Array(n * 2), dv = new DataView(pl.buffer);
+  // ピーク位置は厳密な増加列にする（同じ位置に2塩基があると ATGC が「あいまいなベースコール」と警告する。元データに重複がある場合も解消する）
+  const pp = new Int32Array(n);
+  for (let i = 0; i < n; i++) { pb[i] = r.seq.charCodeAt(i); pc[i] = r.qual[i]; pp[i] = Math.max(i ? pp[i - 1] + 1 : 0, Math.round(r.pos[i])); }
+  if (n && pp[n - 1] > r.tn - 1) { pp[n - 1] = Math.max(n - 1, r.tn - 1); for (let i = n - 2; i >= 0 && pp[i] >= pp[i + 1]; i--) pp[i] = pp[i + 1] - 1; }
+  for (let i = 0; i < n; i++) dv.setUint16(i * 2, Math.max(0, pp[i]));
+  for (const k of [1, 2]) {
+    if (k === 2 && !ab.get('PBAS', 2)) continue;
+    repl.set('PBAS:' + k, { etype: 2, esize: 1, n, data: pb });
+    repl.set('PLOC:' + k, { etype: 4, esize: 2, n, data: pl });
+    repl.set('PCON:' + k, { etype: 2, esize: 1, n, data: pc });
+  }
+  if (r.rc && r.tr) {
+    const cur = traces(r);
+    for (let k = 0; k < 4; k++) {
+      const a = cur[r.tr.order[k]], b = new Uint8Array(cur.n * 2), d2 = new DataView(b.buffer);
+      for (let i = 0; i < cur.n; i++) d2.setInt16(i * 2, a[i]);
+      repl.set('DATA:' + (9 + k), { etype: 4, esize: 2, n: cur.n, data: b });
+    }
+  }
+  return writeAbif(ab, repl);
+}
+
+/* ---------- コンセンサス ---------- */
+const CODE = (() => { const c = {}; for (const ch of IUPAC) c[ch] = 4; c.A = 0; c.C = 1; c.G = 2; c.T = 3; return c; })();
+function consensus(reads, width) {
+  const w = new Float32Array(width * 6);
+  for (const r of reads) {
+    const e = r.seq.length - r.clipR; let pc = -1, pq = 0;
+    for (let i = r.clipL; i < e; i++) {
+      const col = colOf(r, i), code = CODE[r.seq[i]], q = r.qual[i];
+      w[col * 6 + code] += code < 4 ? Math.max(1, q) : 0.5;
+      if (pc >= 0 && col - pc > 1) { const g = Math.max(1, Math.min(pq, q)); for (let c = pc + 1; c < col; c++) w[c * 6 + 5] += g; }
+      pc = col; pq = q;
+    }
+  }
+  const out = new Array(width);
+  for (let c = 0; c < width; c++) {
+    const o = c * 6; let b = -1, bw = 0, s = -1, sw = 0;
+    for (let k = 0; k < 4; k++) { const v = w[o + k]; if (v > bw) { s = b; sw = bw; b = k; bw = v; } else if (v > sw) { s = k; sw = v; } }
+    if (bw === 0) out[c] = w[o + 4] > 0 && w[o + 4] >= w[o + 5] ? 'N' : '-';
+    else if (w[o + 5] > bw) out[c] = '-';
+    else if (s >= 0 && sw >= 0.8 * bw) out[c] = IUPAC2[(1 << b) | (1 << s)];
+    else out[c] = BASES[b];
+  }
+  return out.join('');
+}
+function getContig(S, id) { return S.contigs.find(c => c.id === id); }
+function recomputeCons(S, cg, colList) {
+  const full = consensus(cg.members.map(id => S.reads[id]), cg.width);
+  if (!colList) { cg.cons = full; return; }
+  const a = cg.cons.padEnd(cg.width, '-').split('');
+  for (const c of colList) if (c >= 0 && c < cg.width) a[c] = full[c];
+  cg.cons = a.join('');
+}
+/* どの配列も塩基を持たないカラムを詰める */
+function compact(S, cg) {
+  const used = new Uint8Array(cg.width);
+  for (const id of cg.members) for (const c of S.reads[id].cols) used[c] = 1;
+  const map = new Int32Array(cg.width); let k = 0;
+  for (let c = 0; c < cg.width; c++) { map[c] = k; if (used[c]) k++; }
+  if (k === cg.width) return false;
+  for (const id of cg.members) { const r = S.reads[id]; r.cols = r.cols.map(c => map[c]); }
+  let cons = ''; for (let c = 0; c < cg.width; c++) if (used[c]) cons += cg.cons[c] || '-';
+  cg.cons = cons; cg.width = k; return true;
+}
+function insertColumn(S, cg, c) {
+  for (const id of cg.members) { const r = S.reads[id]; r.cols = r.cols.map(x => x >= c ? x + 1 : x); }
+  const cons = cg.cons.padEnd(cg.width, '-');
+  cg.cons = cons.slice(0, c) + '-' + cons.slice(c); cg.width++;
+}
+
+/* ---------- 編集操作（配列は必ず新しく作り直す＝Undoスナップショットと共有しない） ---------- */
+function editReplace(S, id, i0, i1, ch) {
+  const r = S.reads[id]; const q = r.qual.slice(), ed = r.ed.slice();
+  for (let i = i0; i <= i1; i++) { q[i] = CODE[ch] < 4 ? EDIT_Q : 0; ed[i] = 1; }
+  r.seq = r.seq.slice(0, i0) + ch.repeat(i1 - i0 + 1) + r.seq.slice(i1 + 1); r.qual = q; r.ed = ed;
+  if (r.contig) { const cg = getContig(S, r.contig), cl = []; for (let i = i0; i <= i1; i++) cl.push(r.cols[i]); recomputeCons(S, cg, cl); }
+}
+function cut(a, i0, i1) { const o = new a.constructor(a.length - (i1 - i0 + 1)); o.set(a.subarray(0, i0)); o.set(a.subarray(i1 + 1), i0); return o; }
+function editDelete(S, id, i0, i1) {
+  const r = S.reads[id], n = r.seq.length; if (i1 - i0 + 1 >= n) return false;
+  let dl = 0, dr = 0; for (let i = i0; i <= i1; i++) { if (i < r.clipL) dl++; else if (i >= n - r.clipR) dr++; }
+  const oldCols = r.cols ? Array.from(r.cols.subarray(i0, i1 + 1)) : null;
+  r.seq = r.seq.slice(0, i0) + r.seq.slice(i1 + 1); r.qual = cut(r.qual, i0, i1); r.ed = cut(r.ed, i0, i1); r.pos = cut(r.pos, i0, i1);
+  r.clipL -= dl; r.clipR -= dr;
+  if (r.cols) { r.cols = cut(r.cols, i0, i1); const cg = getContig(S, r.contig); recomputeCons(S, cg, oldCols); compact(S, cg); }
+  return true;
+}
+function ins(a, at, v) { const o = new a.constructor(a.length + 1); o.set(a.subarray(0, at)); o[at] = v; o.set(a.subarray(at), at + 1); return o; }
+/* at: 挿入後の新塩基の添字。side: 'L'=右隣の塩基に寄せる(前挿入) / 'R'=左隣に寄せる(後挿入) */
+function editInsert(S, id, at, ch, side, gapCol) {   // gapCol: 既存ギャップ内のこのカラムに入れる（ギャップを選択して入力したとき）
+  const r = S.reads[id], n = r.seq.length, sp = r.tn / Math.max(1, n);
+  const p = at > 0 && at < n ? (r.pos[at - 1] + r.pos[at]) / 2 : at === 0 ? Math.max(0, r.pos[0] - sp) : Math.min(r.tn - 1, r.pos[n - 1] + sp);
+  let col = -1, cg = null;
+  if (r.cols) {
+    cg = getContig(S, r.contig);
+    if (at === 0) { col = r.cols[0] - 1; if (col < 0) { insertColumn(S, cg, 0); col = 0; } }
+    else if (at === n) { col = r.cols[n - 1] + 1; if (col >= cg.width) { cg.width++; cg.cons = cg.cons.padEnd(cg.width, '-'); } }
+    else if (gapCol > r.cols[at - 1] && gapCol < r.cols[at]) col = gapCol;
+    else if (r.cols[at] - r.cols[at - 1] > 1) col = side === 'R' ? r.cols[at - 1] + 1 : r.cols[at] - 1;
+    else { col = r.cols[at]; insertColumn(S, cg, col); }
+  }
+  if (at < r.clipL) r.clipL++; else if (at > n - r.clipR) r.clipR++;
+  r.seq = r.seq.slice(0, at) + ch + r.seq.slice(at); r.qual = ins(r.qual, at, CODE[ch] < 4 ? EDIT_Q : 0); r.ed = ins(r.ed, at, 1); r.pos = ins(r.pos, at, p);
+  if (cg) { r.cols = ins(r.cols, at, col); recomputeCons(S, cg, [col]); }
+}
+/* アラインメントの手動調整: 塩基 i 以降を、この配列だけ d(+1/-1) カラムずらす。塩基・品質・波形位置は変えない */
+function shiftCols(S, id, i, d, defer) {   // defer: 複数配列を続けて動かすとき、空カラム詰めを呼び出し側でまとめて行う
+  const r = S.reads[id]; if (!r.cols) return false;
+  const cg = getContig(S, r.contig), n = r.seq.length;
+  if (d < 0) {
+    if (i > 0 && r.cols[i] - r.cols[i - 1] < 2) return false;      // 直前にギャップがない
+    if (i === 0 && r.cols[0] === 0) insertColumn(S, cg, 0);         // 左端: 他の配列を右へ送る
+  }
+  const lo = r.cols[i] - 1, hi = r.cols[n - 1] + 1;
+  r.cols = r.cols.map((c, k) => k >= i ? c + d : c);
+  if (r.cols[n - 1] >= cg.width) { cg.width = r.cols[n - 1] + 1; cg.cons = cg.cons.padEnd(cg.width, '-'); }
+  const cl = []; for (let c = Math.max(0, lo); c <= hi; c++) cl.push(c);
+  recomputeCons(S, cg, cl); if (!defer) compact(S, cg); return true;
+}
+function editCons(S, cid, c0, c1, ch) { const cg = getContig(S, cid); const s = cg.cons.padEnd(cg.width, '-'); cg.cons = s.slice(0, c0) + ch.repeat(c1 - c0 + 1) + s.slice(c1 + 1); }
+function setClip(S, id, cl, cr) {
+  const r = S.reads[id], n = r.seq.length; cl = Math.max(0, cl); cr = Math.max(0, cr); if (cl + cr >= n) return false;
+  const ch = []; if (r.cols) {
+    for (let i = Math.min(cl, r.clipL); i < Math.max(cl, r.clipL); i++) ch.push(r.cols[i]);
+    for (let i = n - Math.max(cr, r.clipR); i < n - Math.min(cr, r.clipR); i++) ch.push(r.cols[i]);
+  }
+  r.clipL = cl; r.clipR = cr;
+  if (r.cols && ch.length) recomputeCons(S, getContig(S, r.contig), ch);
+  return true;
+}
+function flipContig(S, cg) {
+  for (const id of cg.members) { const r = S.reads[id]; rcRead(r); mirrorCols(r, cg.width); }
+  cg.cons = revcompStr(cg.cons.padEnd(cg.width, '-'));
+}
+function dissolve(S, cg) {
+  for (const id of cg.members) { const r = S.reads[id]; r.cols = null; r.contig = null; S.free.push(id); }
+  S.contigs = S.contigs.filter(c => c !== cg);
+}
+function removeFromContig(S, ids) {
+  const touched = new Set();
+  for (const id of ids) { const r = S.reads[id]; if (!r || !r.contig) continue; const cg = getContig(S, r.contig); cg.members = cg.members.filter(x => x !== id); r.cols = null; r.contig = null; S.free.push(id); touched.add(cg); }
+  for (const cg of touched) { if (cg.members.length < 2) dissolve(S, cg); else { compact(S, cg); recomputeCons(S, cg, null); } }
+}
+function removeReads(S, ids) {
+  removeFromContig(S, ids); const set = new Set(ids);
+  S.free = S.free.filter(x => !set.has(x)); for (const id of ids) delete S.reads[id];
+}
+
+/* ---------- アラインメント ---------- */
+function encode(s) { const a = new Uint8Array(s.length); for (let i = 0; i < s.length; i++) { const c = CODE[s[i]]; a[i] = c === undefined ? 4 : c; } return a; }
+function kmerIndex(codes) {
+  const m = new Map(), mask = (1 << (2 * K)) - 1; let v = 0, ok = 0;
+  for (let i = 0; i < codes.length; i++) {
+    const c = codes[i]; if (c > 3) { ok = 0; v = 0; continue; }
+    v = ((v << 2) | c) & mask; if (++ok >= K) { let l = m.get(v); if (!l) m.set(v, l = []); if (l.length < 32) l.push(i - K + 1); }
+  }
+  return m;
+}
+/* 共有k-merの対角線分布から最有力の対角線(i-j)を求める */
+function seedDiag(idxA, codesB) {
+  const ds = [], mask = (1 << (2 * K)) - 1; let v = 0, ok = 0;
+  for (let j = 0; j < codesB.length; j++) {
+    const c = codesB[j]; if (c > 3) { ok = 0; v = 0; continue; }
+    v = ((v << 2) | c) & mask; if (++ok >= K) { const l = idxA.get(v); if (l) for (const p of l) ds.push(p - (j - K + 1)); }
+  }
+  if (!ds.length) return null;
+  ds.sort((a, b) => a - b);
+  let best = 0, bi = 0, lo = 0;
+  for (let hi = 0; hi < ds.length; hi++) { while (ds[hi] - ds[lo] > 24) lo++; if (hi - lo + 1 > best) { best = hi - lo + 1; bi = lo; } }
+  return { diag: ds[bi + (best >> 1)], hits: best };
+}
+/* 帯付きオーバーラップアラインメント（両端のはみ出しは無料）。ops: M=対応, I=aのみ, D=bのみ */
+function bandAlign(a, b, diag, W) {
+  const n = a.length, m = b.length, bw = 2 * W + 1, NEG = -1e9, GAP = -3;
+  const H = new Int32Array((n + 1) * bw).fill(NEG), T = new Uint8Array((n + 1) * bw);
+  let best = NEG, bi = -1, bj = -1;
+  for (let i = 0; i <= n; i++) {
+    const lo = i - diag - W, j0 = Math.max(0, lo), j1 = Math.min(m, lo + bw - 1);
+    for (let j = j0; j <= j1; j++) {
+      const k = j - lo, idx = i * bw + k; let h = NEG, t = 0;
+      if (i === 0 || j === 0) h = 0;
+      else {
+        const d = H[idx - bw];
+        if (d > NEG) { const x = a[i - 1], y = b[j - 1]; h = d + (x > 3 || y > 3 ? 0 : x === y ? 1 : -2); t = 1; }
+        if (k + 1 < bw) { const u = H[idx - bw + 1]; if (u > NEG && u + GAP > h) { h = u + GAP; t = 2; } }
+        if (k > 0) { const l = H[idx - 1]; if (l > NEG && l + GAP > h) { h = l + GAP; t = 3; } }
+      }
+      H[idx] = h; T[idx] = t;
+      if ((i === n || j === m) && h > best) { best = h; bi = i; bj = j; }
+    }
+  }
+  if (bi < 0) return null;
+  let i = bi, j = bj, cols = 0, match = 0, nn = 0; const ops = [];
+  for (;;) {
+    const t = T[i * bw + (j - (i - diag - W))]; if (!t) break;
+    if (t === 1) { const x = a[i - 1], y = b[j - 1]; if (x > 3 || y > 3) nn++; else if (x === y) match++; ops.push('M'); i--; j--; }
+    else if (t === 2) { ops.push('I'); i--; } else { ops.push('D'); j--; }
+    cols++;
+  }
+  ops.reverse();
+  return { score: best, a0: i, b0: j, ops, cols, ident: cols - nn > 0 ? match / (cols - nn) : 0 };
+}
+function tryAlign(codesA, idxA, codesB, opt) {
+  const sd = seedDiag(idxA, codesB); if (!sd || sd.hits < (opt.minIdent < 0.85 ? 1 : 2)) return null;
+  const W = 30 + Math.round(0.02 * Math.max(codesA.length, codesB.length));
+  const al = bandAlign(codesA, codesB, sd.diag, W);
+  return al && al.cols >= opt.minOverlap && al.ident >= opt.minIdent ? al : null;
+}
+
+/* ---------- アセンブル ---------- */
+function refreshCluster(c) {
+  c.cons = consensus(c.reads, c.width); let cs = ''; const cmap = [];
+  for (let i = 0; i < c.width; i++) if (c.cons[i] !== '-') { cs += c.cons[i]; cmap.push(i); }
+  c.cs = cs; c.cmap = cmap; c.codes = encode(cs); c.rcodes = encode(revcompStr(cs)); c.kidx = kmerIndex(c.codes);
+}
+function flipCluster(c) { for (const r of c.reads) { rcRead(r); mirrorCols(r, c.width); } refreshCluster(c); }
+function mergeClusters(A, B, al) {
+  const an = []; let ia = al.a0, jb = al.b0;
+  for (const op of al.ops) { if (op === 'M') { an.push(A.cmap[ia], B.cmap[jb]); ia++; jb++; } else if (op === 'I') ia++; else jb++; }
+  if (!an.length) return null;
+  const mA = new Int32Array(A.width), mB = new Int32Array(B.width);
+  let ca = an[0], cb = an[1], cur = Math.max(ca, cb);
+  for (let c = 0; c <= ca; c++) mA[c] = cur - (ca - c);
+  for (let c = 0; c <= cb; c++) mB[c] = cur - (cb - c);
+  for (let k = 2; k < an.length; k += 2) {
+    const ca2 = an[k], cb2 = an[k + 1], ga = ca2 - ca - 1, gb = cb2 - cb - 1;
+    for (let t = 1; t <= ga; t++) mA[ca + t] = cur + t;
+    for (let t = 1; t <= gb; t++) mB[cb + t] = cur + t;
+    cur += Math.max(ga, gb) + 1; mA[ca2] = cur; mB[cb2] = cur; ca = ca2; cb = cb2;
+  }
+  for (let c = ca + 1; c < A.width; c++) mA[c] = cur + (c - ca);
+  for (let c = cb + 1; c < B.width; c++) mB[c] = cur + (c - cb);
+  for (const r of A.reads) r.cols = r.cols.map(c => mA[c]);
+  for (const r of B.reads) r.cols = r.cols.map(c => mB[c]);
+  const M = { reads: A.reads.concat(B.reads), width: Math.max(cur + A.width - ca, cur + B.width - cb), pres: A.pres.concat(B.pres) };
+  refreshCluster(M); return M;
+}
+/* selIds=null なら全配列を最初から。opt={minOverlap, minIdent(0-1)} */
+function assemble(S, selIds, opt) {
+  let units;
+  if (!selIds) { for (const cg of S.contigs.slice()) dissolve(S, cg); units = S.free.slice(); }
+  else { units = []; for (const id of selIds) { const r = S.reads[id]; if (!r) continue; const u = r.contig || id; if (!units.includes(u)) units.push(u); } }
+  if (units.length < 2) return { merged: 0, msg: 'アセンブル対象が2つ以上必要です' };
+  const rc0 = new Map();
+  const cl = units.map(u => {
+    const cg = getContig(S, u); let c;
+    if (cg) c = { reads: cg.members.map(id => S.reads[id]), width: cg.width, pres: [cg] };
+    else { const r = S.reads[u]; r.cols = Int32Array.from({ length: r.seq.length }, (_, i) => i); c = { reads: [r], width: r.seq.length, pres: [] }; }
+    for (const r of c.reads) rc0.set(r.id, r.rc);
+    refreshCluster(c); return c;
+  });
+  const edges = [];
+  for (let i = 0; i < cl.length; i++) for (let j = i + 1; j < cl.length; j++) {
+    if (cl[i].cs.length < opt.minOverlap || cl[j].cs.length < opt.minOverlap) continue;
+    const f = tryAlign(cl[i].codes, cl[i].kidx, cl[j].codes, opt), v = tryAlign(cl[i].codes, cl[i].kidx, cl[j].rcodes, opt);
+    const e = f && (!v || f.score >= v.score) ? { i, j, rc: false, score: f.score } : v ? { i, j, rc: true, score: v.score } : null;
+    if (e) edges.push(e);
+  }
+  edges.sort((a, b) => b.score - a.score);
+  const par = cl.map((_, i) => i), flip = cl.map(() => false), cur = cl.slice(), mem = cl.map((_, i) => [i]);
+  const find = x => { while (par[x] !== x) x = par[x]; return x; };
+  let merged = 0;
+  for (const e of edges) {
+    const ra = find(e.i), rb = find(e.j); if (ra === rb) continue;
+    let A = cur[ra], B = cur[rb];
+    const need = (flip[e.i] !== flip[e.j]) !== e.rc;
+    let fa = false, fb = false;
+    if (need) { if (B.pres.length && !A.pres.length) fa = true; else if (!B.pres.length && A.pres.length) fb = true; else if (A.reads.length < B.reads.length) fa = true; else fb = true; }
+    const ca = fa ? A.rcodes : A.codes, cb = fb ? B.rcodes : B.codes;
+    if (!tryAlign(ca, fa ? kmerIndex(ca) : A.kidx, cb, opt)) continue;
+    if (fa) { flipCluster(A); for (const u of mem[ra]) flip[u] = !flip[u]; }
+    if (fb) { flipCluster(B); for (const u of mem[rb]) flip[u] = !flip[u]; }
+    const al = tryAlign(A.codes, A.kidx, B.codes, opt); if (!al) continue;
+    const M = mergeClusters(A, B, al); if (!M) continue;
+    par[rb] = ra; cur[ra] = M; cur[rb] = null; mem[ra] = mem[ra].concat(mem[rb]); merged++;
+  }
+  let nNew = 0;
+  for (let i = 0; i < cl.length; i++) {
+    const c = cur[i]; if (!c || find(i) !== i) continue;
+    if (c.reads.length === 1 && !c.pres.length) { c.reads[0].cols = null; continue; }
+    if (!c.pres.length) {
+      let f = 0; for (const r of c.reads) if (r.rc !== rc0.get(r.id)) f++;
+      if (f * 2 > c.reads.length) flipCluster(c);
+    }
+    if (c.pres.length === 1 && c.reads.length === c.pres[0].members.length) continue; // 変化なし
+    let cg;
+    if (c.pres.length) {
+      cg = c.pres[0]; const old = []; for (const p of c.pres) old.push(...p.members);
+      const fresh = c.reads.filter(r => !old.includes(r.id)).sort((a, b) => a.cols[a.clipL] - b.cols[b.clipL]).map(r => r.id);
+      cg.members = old.concat(fresh); const drop = c.pres.slice(1); S.contigs = S.contigs.filter(x => !drop.includes(x));
+    } else {
+      cg = { id: newId('c'), name: 'Contig ' + (S.nextContig++), members: c.reads.slice().sort((a, b) => a.cols[a.clipL] - b.cols[b.clipL]).map(r => r.id) };
+      S.contigs.push(cg); nNew++;
+    }
+    cg.width = c.width; cg.cons = c.cons;
+    for (const r of c.reads) r.contig = cg.id;
+    const ms = new Set(cg.members); S.free = S.free.filter(x => !ms.has(x));
+    compact(S, cg);
+  }
+  return { merged, nNew, msg: merged ? `${merged} 回結合しました（コンティグ ${S.contigs.length} 個、未結合 ${S.free.length} 本）` : '結合できる配列はありませんでした' };
+}
+
+/* ---------- プロジェクト保存 ---------- */
+function b64enc(u8) { let s = ''; for (let i = 0; i < u8.length; i += 0x8000) s += String.fromCharCode.apply(null, u8.subarray(i, i + 0x8000)); return btoa(s); }
+function b64dec(s) { const b = atob(s), u = new Uint8Array(b.length); for (let i = 0; i < b.length; i++) u[i] = b.charCodeAt(i); return u; }
+function newState() { return { reads: {}, contigs: [], free: [], nextContig: 1 }; }
+function serialize(S) {
+  const order = []; for (const c of S.contigs) order.push(...c.members); order.push(...S.free);
+  return { format: 'sanger-assembler-project', version: 1, uid, nextContig: S.nextContig,
+    reads: order.map(id => { const r = S.reads[id]; return { id: r.id, name: r.name, file: r.file, kind: r.kind, rc: r.rc, seq: r.seq, qual: Array.from(r.qual),
+      pos: Array.from(r.pos, x => Math.round(x * 10) / 10), ed: Array.from(r.ed).join(''), clipL: r.clipL, clipR: r.clipR, cols: r.cols ? Array.from(r.cols) : null, contig: r.contig, ab1: r.ab1 ? b64enc(r.ab1) : null }; }),
+    contigs: S.contigs.map(c => ({ id: c.id, name: c.name, cons: c.cons, width: c.width, members: c.members })), free: S.free };
+}
+function deserialize(o) {
+  if (!o || o.format !== 'sanger-assembler-project') throw new Error('プロジェクトファイルではありません');
+  const S = newState(); S.nextContig = o.nextContig || 1; uid = Math.max(uid, o.uid || 1);
+  for (const d of o.reads) {
+    const ab1 = d.ab1 ? b64dec(d.ab1) : null, tr = ab1 ? tracesFromAbif(parseAbif(ab1)) : null, n = d.seq.length;
+    S.reads[d.id] = { id: d.id, name: d.name, file: d.file, kind: d.kind, rc: !!d.rc, seq: d.seq, qual: Uint8Array.from(d.qual), pos: Float32Array.from(d.pos),
+      ed: Uint8Array.from(d.ed, x => +x), clipL: d.clipL, clipR: d.clipR, cols: d.cols ? Int32Array.from(d.cols) : null, contig: d.contig || null, tr, tn: tr ? tr.n : Math.max(1, n) * SP, ab1 };
+  }
+  S.contigs = o.contigs.map(c => ({ ...c })); S.free = o.free.slice();
+  return S;
+}
+function fastaOf(name, seq) { let s = '>' + name + '\n'; for (let i = 0; i < seq.length; i += 70) s += seq.slice(i, i + 70) + '\n'; return s; }
+function dispName(r) { return r.name + (r.rc ? ' (相補鎖)' : ''); }
+
+return { IUPAC, CODE, revcompStr, lowerBound, colOf, idxAtCol, nearestIdx, sampleAtCol, parseAbif, readFromAbif, parseFasta, traces, autoTrim, rcRead, exportAb1,
+  consensus, getContig, recomputeCons, compact, editReplace, editDelete, editInsert, shiftCols, editCons, setClip, flipContig, dissolve, removeFromContig, removeReads,
+  assemble, newState, serialize, deserialize, fastaOf, dispName, mottRange };
+})();
+if (typeof module !== 'undefined') module.exports = SA;
+</script>
+
+<script id="ui">
+/* ===================== UI ===================== */
+(function () {
+'use strict';
+const $ = id => document.getElementById(id);
+const RH = 20, RULER = 18;
+const COL = { A: '#1a9a1a', C: '#1f4fd8', G: '#222', T: '#d62020', N: '#888' };
+let S = SA.newState();
+let rows = [], panels = [];
+let selRows = new Set(), rowAnchor = null;
+let sel = null;            // {kind:'read'|'cons', id, a, b}
+let mode = 'rep';
+let CW = 12, zx = 1, amp = 1, PH = 110;
+let tc = {}, activeG = null;
+let undo = [], redo = [], dirty = false, projHandle = null;
+const names = $('names'), seqView = $('seqView'), seqCv = $('seqCv'), seqScroll = $('seqScroll'), seqSp = $('seqSp');
+const trPane = $('trPane'), trCv = $('trCv'), trScroll = $('trScroll'), trSp = $('trSp'), slider = $('trSlider');
+
+function status(msg) { $('status').textContent = msg; }
+function groupOf(r) { return r.contig || r.id; }
+function groupWidth(g) { const cg = SA.getContig(S, g); return cg ? cg.width : S.reads[g] ? S.reads[g].seq.length : 1; }
+
+/* ---------- Undo ---------- */
+function snap() {
+  const reads = {}; for (const id in S.reads) reads[id] = { ...S.reads[id] };
+  return { reads, contigs: S.contigs.map(c => ({ ...c, members: c.members.slice() })), free: S.free.slice(), nextContig: S.nextContig };
+}
+function pushUndo() { undo.push(snap()); if (undo.length > 200) undo.shift(); redo = []; dirty = true; }
+function restore(st) {
+  S = st; if (sel) delete sel.id2;
+  if (sel && sel.aln) { const g = S.reads[sel.id] && S.reads[sel.id].contig; for (const [id, i] of sel.aln) if (!g || !S.reads[id] || S.reads[id].contig !== g || i >= S.reads[id].seq.length) sel.aln.delete(id); }
+  if (sel) { const ok = sel.kind === 'read' ? S.reads[sel.id] && Math.max(sel.a, sel.b) < S.reads[sel.id].seq.length : SA.getContig(S, sel.id) && Math.max(sel.a, sel.b) < SA.getContig(S, sel.id).width; if (!ok) sel = null; }
+  rebuild();
+}
+function doUndo() { if (!undo.length) return; redo.push(snap()); restore(undo.pop()); status('元に戻しました'); }
+function doRedo() { if (!redo.length) return; undo.push(snap()); restore(redo.pop()); status('やり直しました'); }
+
+/* ---------- 配列名領域の幅（ドラッグで変更、次回も同じ幅で開く） ---------- */
+{
+  const sp = $('nmSplit'), root = document.documentElement;
+  const setW = (w, save) => { w = Math.max(80, Math.min(Math.max(80, window.innerWidth - 150), Math.round(w))); root.style.setProperty('--nw', w + 'px'); if (save) try { localStorage.setItem('sangerNameW', w); } catch (e) { } if (typeof req === 'function') req(); };
+  try { const w = +localStorage.getItem('sangerNameW'); if (w) root.style.setProperty('--nw', w + 'px'); } catch (e) { }
+  let dragging = false;
+  sp.addEventListener('mousedown', ev => { if (ev.button !== 0) return; dragging = true; sp.classList.add('drag'); ev.preventDefault(); });
+  window.addEventListener('mousemove', ev => { if (dragging) setW(ev.clientX - names.getBoundingClientRect().left, false); });
+  window.addEventListener('mouseup', () => { if (!dragging) return; dragging = false; sp.classList.remove('drag'); setW(names.getBoundingClientRect().width, true); });
+  sp.addEventListener('dblclick', () => setW(230, true));
+}
+
+/* ---------- 行構成 ---------- */
+function rebuild() {
+  rows = [];
+  for (const cg of S.contigs) { rows.push({ t: 'cons', id: cg.id }); for (const id of cg.members) rows.push({ t: 'read', id }); }
+  if (S.free.length) { if (S.contigs.length) rows.push({ t: 'hdr' }); for (const id of S.free) rows.push({ t: 'read', id }); }
+  for (const k of [...selRows]) if (!S.reads[k] && !SA.getContig(S, k)) selRows.delete(k);
+  names.textContent = '';
+  const top = document.createElement('div'); top.style.height = RULER + 'px'; names.appendChild(top);
+  rows.forEach((row, ri) => {
+    const d = document.createElement('div'); d.className = 'nm ' + row.t; d.dataset.ri = ri;
+    if (row.t === 'cons') { const cg = SA.getContig(S, row.id); d.textContent = `${cg.name}（${cg.members.length}本, ${cg.cons.replace(/-/g, '').length} bp）`; d.title = 'ダブルクリックで名前変更'; d.draggable = true; }
+    else if (row.t === 'hdr') d.textContent = `未結合（${S.free.length}本）`;
+    else {
+      const r = S.reads[row.id], a = document.createElement('span'); a.className = 'dir ' + (r.rc ? 'c' : 'f'); a.textContent = r.rc ? '◀' : '▶'; d.append(a, r.name);
+      d.title = `${r.file}  ${r.rc ? '◀ 相補鎖' : '▶ 読み込み時の向き'}  ${r.seq.length} bp  有効範囲 ${r.clipL + 1}–${r.seq.length - r.clipR}`; d.draggable = true;
+    }
+    if (row.id && selRows.has(row.id)) d.classList.add('sel');
+    names.appendChild(d);
+  });
+  const pad = document.createElement('div'); pad.style.height = '40px'; names.appendChild(pad);
+  let maxc = 1; for (const cg of S.contigs) maxc = Math.max(maxc, cg.width); for (const id of S.free) maxc = Math.max(maxc, S.reads[id].seq.length);
+  seqSp.style.width = (maxc + 8) * CW + 'px'; seqSp.style.height = RULER + rows.length * RH + 4 + 'px';
+  panels = []; let y = 0;
+  for (const row of rows) if (row.t === 'read' && S.reads[row.id].tr) { panels.push({ id: row.id, top: y, h: PH }); y += PH; }   // 波形のない配列（FASTA由来）は波形エリアに出さない
+  trSp.style.height = y + 'px'; trSp.style.width = '1px';
+  $('empty').style.display = rows.length ? 'none' : 'flex';
+  if (activeG && !S.reads[activeG] && !SA.getContig(S, activeG)) activeG = null;
+  updateSlider(); req();
+}
+function refreshSelClasses() { for (const d of names.querySelectorAll('.nm')) { const row = rows[d.dataset.ri]; d.classList.toggle('sel', !!(row && row.id && selRows.has(row.id))); } }
+
+/* ---------- 描画 ---------- */
+let pending = false;
+function req() { if (!pending) { pending = true; requestAnimationFrame(() => { pending = false; drawOvw(); drawSeq(); drawTrace(); }); } }
+/* ---------- コンティグ概観（不一致マップ） ---------- */
+const ORH = 7; let ovId = null;
+function ovContig() { if (activeG && SA.getContig(S, activeG)) ovId = activeG; return SA.getContig(S, ovId) || S.contigs[0] || null; }
+function mismatches(r, cg) {   // [塩基添字, カラム] の配列。ギャップ（コンセンサスに塩基があるのに配列側が欠失）も含む
+  const out = [], e = r.seq.length - r.clipR, cons = cg.cons;
+  for (let i = r.clipL; i < e; i++) {
+    const c = r.cols[i];
+    if (i > r.clipL) for (let g = r.cols[i - 1] + 1; g < c; g++) if (cons[g] && cons[g] !== '-') out.push([i, g]);
+    const k = cons[c]; if (k && k !== '-' && k !== r.seq[i]) out.push([i, c]);
+  }
+  return out;
+}
+function drawOvw() {
+  const cg = ovContig(), wrap = $('ovwWrap'), box = $('ovwBox');
+  if (!cg) { if (wrap.style.display !== 'none') wrap.style.display = 'none'; return; }
+  const hh = (cg.members.length + 1) * ORH + 6 + 'px';
+  if (wrap.style.display !== 'flex') wrap.style.display = 'flex';
+  if (box.style.height !== hh) box.style.height = hh;
+  const [ctx, W, H] = fit($('ovw'), box), sx = W / cg.width, tw = Math.max(1.5, sx);
+  const v0 = seqScroll.scrollLeft / CW; ctx.fillStyle = '#dbe6fa'; ctx.fillRect(v0 * sx, 0, Math.max(2, seqView.clientWidth / CW * sx), H);
+  const cons = cg.cons; let f = 0, l = cg.width - 1; while (f < l && cons[f] === '-') f++; while (l > f && cons[l] === '-') l--;
+  ctx.fillStyle = '#b9ad84'; ctx.fillRect(f * sx, 3, (l - f + 1) * sx, ORH - 2);
+  ctx.fillStyle = '#f08c00'; let amb = 0; for (let c = f; c <= l; c++) if (!'ACGT-'.includes(cons[c])) { ctx.fillRect(c * sx, 2, tw, ORH); amb++; }
+  let nm = 0;
+  cg.members.forEach((id, k) => {
+    const r = S.reads[id], n = r.seq.length, y = 3 + (k + 1) * ORH;
+    ctx.fillStyle = '#dfe2e6'; ctx.fillRect(r.cols[0] * sx, y + 1, (r.cols[n - 1] - r.cols[0] + 1) * sx, ORH - 4);
+    const a = r.cols[r.clipL], b = r.cols[n - r.clipR - 1];
+    ctx.fillStyle = selRows.has(id) || (sel && sel.kind === 'read' && sel.id === id) ? '#5b84d6' : '#9fb0c6'; ctx.fillRect(a * sx, y, (b - a + 1) * sx, ORH - 2);
+    ctx.fillStyle = '#e01818'; for (const m of mismatches(r, cg)) { ctx.fillRect(m[1] * sx, y - 1, tw, ORH); nm++; }
+  });
+  if (sel && selGroup() === cg.id) { ctx.fillStyle = '#000'; ctx.fillRect(selCol() * sx + sx / 2 - .5, 0, 1, H); }
+  const t = `${cg.name} 概観\n不一致 ${nm}・あいまい ${amb}`; if ($('ovwName').innerText !== t) $('ovwName').innerText = t;
+}
+$('ovwBox').addEventListener('mousedown', ev => {
+  const cg = ovContig(); if (!cg || ev.button !== 0) return; ev.preventDefault();
+  const rc = $('ovwBox').getBoundingClientRect(), sx = rc.width / cg.width, c = Math.max(0, Math.min(cg.width - 1, Math.floor((ev.clientX - rc.left) / sx)));
+  const k = Math.floor((ev.clientY - rc.top - 3) / ORH) - 1;
+  if (k < 0 || k >= cg.members.length) return setSel('cons', cg.id, c, c, 'ovw');
+  const r = S.reads[cg.members[k]]; let i = SA.nearestIdx(r, c), best = 6 / sx;   // 近く(6px以内)に不一致があればそれを選ぶ
+  for (const m of mismatches(r, cg)) { const d = Math.abs(m[1] - c); if (d < best) { best = d; i = m[0]; } }
+  setSel('read', r.id, i, i, 'ovw');
+});
+/* 概観図のSVG（画面のキャンバスとは別に、配列名・目盛り・凡例を付けて組み立てる） */
+function ovwSvg(cg) {
+  const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const mc = document.createElement('canvas').getContext('2d'); mc.font = '11px sans-serif';
+  const rs = cg.members.map(id => S.reads[id]), consName = cg.name + ' コンセンサス';
+  const LW = Math.ceil(Math.max(mc.measureText(consName).width, ...rs.map(r => mc.measureText(r.name).width + 16))) + 16;
+  const PW = 900, RS = 16, BH = 9, top = 46, sx = PW / cg.width, mw = Math.max(1.2, sx), f2 = v => +v.toFixed(2), X = c => f2(LW + c * sx);
+  const cons = cg.cons; let f = 0, l = cg.width - 1; while (f < l && cons[f] === '-') f++; while (l > f && cons[l] === '-') l--;
+  const body = []; let nm = 0, amb = 0;
+  const step = [10, 20, 50, 100, 200, 500, 1000, 2000, 5000].find(s => cg.width / s <= 12) || 10000;
+  body.push(`<line x1="${LW}" y1="${top - 8}" x2="${LW + PW}" y2="${top - 8}" stroke="#666"/>`);
+  for (let c = step; c <= cg.width; c += step) { const x = X(c - .5); body.push(`<line x1="${x}" y1="${top - 12}" x2="${x}" y2="${top - 8}" stroke="#666"/><text x="${x}" y="${top - 15}" text-anchor="middle" font-size="9" fill="#555">${c}</text>`); }
+  const label = (y, html) => body.push(`<text x="${LW - 6}" y="${y + BH - 1}" text-anchor="end">${html}</text>`);
+  label(top, `<tspan font-weight="bold">${esc(consName)}</tspan>`);
+  body.push(`<rect x="${X(f)}" y="${top}" width="${f2((l - f + 1) * sx)}" height="${BH}" fill="#b9ad84"/>`);
+  for (let c = f; c <= l; c++) if (!'ACGT-'.includes(cons[c])) { body.push(`<rect x="${X(c)}" y="${top - 1}" width="${f2(mw)}" height="${BH + 2}" fill="#f08c00"/>`); amb++; }
+  rs.forEach((r, k) => {
+    const n = r.seq.length, y = top + (k + 1) * RS, a = r.cols[r.clipL], b = r.cols[n - r.clipR - 1];
+    label(y, `<tspan fill="${r.rc ? '#d9480f' : '#1c6fd1'}">${r.rc ? '◀' : '▶'}</tspan> ${esc(r.name)}`);
+    body.push(`<rect x="${X(r.cols[0])}" y="${y + 3}" width="${f2((r.cols[n - 1] - r.cols[0] + 1) * sx)}" height="${BH - 6}" fill="#dfe2e6"/>`);
+    body.push(`<rect x="${X(a)}" y="${y}" width="${f2((b - a + 1) * sx)}" height="${BH}" fill="#9fb0c6"/>`);
+    for (const m of mismatches(r, cg)) { body.push(`<rect x="${X(m[1])}" y="${y - 1}" width="${f2(mw)}" height="${BH + 2}" fill="#e01818"/>`); nm++; }
+  });
+  const ly = top + (rs.length + 1) * RS + 8, H = ly + 18, W = LW + PW + 12;
+  const leg = [['#e01818', 3, 'コンセンサスと不一致'], ['#f08c00', 3, 'あいまい塩基'], ['#9fb0c6', 14, '有効範囲'], ['#dfe2e6', 14, 'トリム部'], ['#1c6fd1', 0, '▶ 読み込み時の向き'], ['#d9480f', 0, '◀ 相補鎖']];
+  let lx = LW;
+  for (const [col, w, t] of leg) {
+    if (w) { body.push(`<rect x="${lx}" y="${ly}" width="${w}" height="${BH}" fill="${col}"/><text x="${lx + w + 4}" y="${ly + BH - 1}" fill="#555">${t}</text>`); lx += w + 4; }
+    else body.push(`<text x="${lx}" y="${ly + BH - 1}" fill="#555"><tspan fill="${col}">${t[0]}</tspan>${t.slice(1)}</text>`);
+    lx += Math.ceil(mc.measureText(t).width) + 18;
+  }
+  const title = `${cg.name}（${rs.length}本, ${cons.replace(/-/g, '').length} bp, アラインメント幅 ${cg.width}）  不一致 ${nm}・あいまい ${amb}`;
+  return `<?xml version="1.0" encoding="UTF-8"?>\n<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" font-family="sans-serif" font-size="11" fill="#222">\n<rect width="${W}" height="${H}" fill="#fff"/>\n<text x="${LW}" y="14" font-size="12" font-weight="bold">${esc(title)}</text>\n${body.join('\n')}\n</svg>\n`;
+}
+$('bOvwSvg').onclick = async () => {
+  const cg = ovContig(); if (!cg) return;
+  const h = await saveAs(new Blob([ovwSvg(cg)], { type: 'image/svg+xml' }), cg.name.replace(/\s+/g, '_') + '_overview.svg', 'SVG', '.svg');
+  if (h) status(cg.name + ' の概観図をSVGで保存しました');
+};
+function fit(cv, el) {
+  const dpr = window.devicePixelRatio || 1, w = el.clientWidth, h = el.clientHeight;
+  if (cv.width !== Math.round(w * dpr) || cv.height !== Math.round(h * dpr)) { cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr); cv.style.width = w + 'px'; cv.style.height = h + 'px'; }
+  const ctx = cv.getContext('2d'); ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, w, h); return [ctx, w, h];
+}
+function selRange() { return sel ? [Math.min(sel.a, sel.b), Math.max(sel.a, sel.b)] : null; }
+function drawSeq() {
+  const [ctx, W, H] = fit(seqCv, seqView), sl = seqScroll.scrollLeft, st = seqScroll.scrollTop;
+  names.scrollTop = st;
+  const c0 = Math.floor(sl / CW), c1 = Math.ceil((sl + W) / CW);
+  const r0 = Math.max(0, Math.floor(st / RH)), r1 = Math.min(rows.length - 1, Math.floor((st + H) / RH));
+  const letters = CW >= 7; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  const font = `${Math.min(13, CW + 1)}px Consolas,"Courier New",monospace`;
+  const sr = selRange(), blk = blockInfo(), selBg = sel && sel.hit ? '#ffc35c' : '#8fbcff';   // 検索ヒットは橙
+  for (let ri = r0; ri <= r1; ri++) {
+    const row = rows[ri], y = RULER + ri * RH - st;
+    if (row.t === 'hdr') { ctx.fillStyle = '#e3e6ea'; ctx.fillRect(0, y, W, RH); continue; }
+    if (row.t === 'cons') {
+      const cg = SA.getContig(S, row.id); ctx.fillStyle = selRows.has(row.id) ? '#dfe9fb' : '#f3efe1'; ctx.fillRect(0, y, W, RH);
+      ctx.font = 'bold ' + font;
+      for (let c = Math.max(0, c0); c <= Math.min(cg.width - 1, c1); c++) {
+        const ch = cg.cons[c] || '-', x = c * CW - sl;
+        if (sel && sel.kind === 'cons' && sel.id === row.id && c >= sr[0] && c <= sr[1]) { ctx.fillStyle = selBg; ctx.fillRect(x, y, CW, RH); }
+        if (ch === '-') continue;
+        ctx.fillStyle = COL[ch] || '#a0a'; if (letters) ctx.fillText(ch, x + CW / 2, y + RH / 2 + 1); else ctx.fillRect(x, y + 4, CW, RH - 8);
+      }
+      continue;
+    }
+    const r = S.reads[row.id], n = r.seq.length, cg = r.contig ? SA.getContig(S, r.contig) : null, cons = cg ? cg.cons : null;
+    if (selRows.has(row.id)) { ctx.fillStyle = '#eef4ff'; ctx.fillRect(0, y, W, RH); }
+    ctx.font = font;
+    let i = r.cols ? SA.lowerBound(r.cols, c0) : Math.max(0, c0);
+    const isSel = !blk && sel && sel.kind === 'read' && sel.id === r.id, inBlk = blk && blk.ids.includes(r.id);
+    const alnI = sel && sel.aln && sel.aln.has(r.id) ? sel.aln.get(r.id) : -1;
+    for (; i < n; i++) {
+      const col = SA.colOf(r, i); if (col > c1) break;
+      const x = col * CW - sl, ch = r.seq[i], clipped = i < r.clipL || i >= n - r.clipR;
+      if (r.cols && i > 0 && col - r.cols[i - 1] > 1) {   // ギャップ
+        const inner = i > r.clipL && i < n - r.clipR;
+        for (let c = Math.max(r.cols[i - 1] + 1, c0); c < col; c++) {
+          const gx = c * CW - sl;
+          if (isSel && sel.gap === c) { ctx.fillStyle = selBg; ctx.fillRect(gx, y + 1, CW, RH - 2); }   // 選択中のギャップ
+          else if (inner && cons && cons[c] !== '-') { ctx.fillStyle = '#ffb9ad'; ctx.fillRect(gx, y + 1, CW, RH - 2); }
+          ctx.fillStyle = '#999'; if (letters) ctx.fillText('-', gx + CW / 2, y + RH / 2 + 1);
+        }
+      }
+      let bg = null;
+      if (inBlk ? (col >= blk.c0 && col <= blk.c1) : ((isSel && sel.gap === undefined && i >= sr[0] && i <= sr[1]) || alnI === i)) bg = selBg;
+      else if (!clipped && cons && cons[col] !== '-' && cons[col] !== ch) bg = '#ffb9ad';
+      else if (!clipped && r.kind === 'ab1' && r.qual[i] < 20) bg = '#fff0b8';
+      if (bg) { ctx.fillStyle = bg; ctx.fillRect(x, y + 1, CW, RH - 2); }
+      ctx.fillStyle = clipped ? '#b9bdc2' : (COL[ch] || '#a0a');
+      if (letters) ctx.fillText(ch, x + CW / 2, y + RH / 2 + 1); else if (!bg) ctx.fillRect(x, y + 5, CW, RH - 10);
+      if (r.ed[i]) ctx.fillRect(x + 1, y + RH - 3, CW - 2, 1.5);
+    }
+  }
+  if (mode === 'aln' && sel && sel.kind === 'read' && S.reads[sel.id].contig) {   // 位置調整: ギャップが入る位置を縦線で示す
+    ctx.fillStyle = '#7b2cbf';
+    for (const [id, i] of alnTargets()) { const ri = rows.findIndex(row => row.t === 'read' && row.id === id); ctx.fillRect(S.reads[id].cols[i] * CW - sl - 1, RULER + ri * RH - st, 2, RH); }
+  } else if (mode === 'ins' && sel && sel.kind === 'read' && !blk && sel.gap === undefined) {   // 挿入: 塩基が入る位置を縦線で示す（Shiftを押している間は後ろ側）
+    const r = S.reads[sel.id], ri = rows.findIndex(row => row.t === 'read' && row.id === sel.id);
+    const x = shiftDown ? (SA.colOf(r, sr[1]) + 1) * CW : SA.colOf(r, sr[0]) * CW;
+    ctx.fillStyle = '#0a8f3c'; ctx.fillRect(x - sl - 1, RULER + ri * RH - st, 2, RH);
+  }
+  if (sel && sel.hit && !blk) {   // 検索ヒット範囲を枠で囲む
+    const ri = rows.findIndex(x => x.id === sel.id), r = sel.kind === 'read' ? S.reads[sel.id] : null, ca = r ? SA.colOf(r, sr[0]) : sr[0], cb = r ? SA.colOf(r, sr[1]) : sr[1];
+    ctx.strokeStyle = '#d9480f'; ctx.lineWidth = 2; ctx.strokeRect(ca * CW - sl, RULER + ri * RH - st + 1, (cb - ca + 1) * CW, RH - 2); ctx.lineWidth = 1;
+  }
+  if (blk) { const ra = rows.findIndex(x => x.id === blk.ids[0]); ctx.strokeStyle = '#2a62d8'; ctx.lineWidth = 1.5; ctx.strokeRect(blk.c0 * CW - sl + .5, RULER + ra * RH - st + .5, (blk.c1 - blk.c0 + 1) * CW - 1, blk.ids.length * RH - 1); ctx.lineWidth = 1; }
+  ctx.fillStyle = '#f1f3f5'; ctx.fillRect(0, 0, W, RULER); ctx.strokeStyle = '#c9ced3'; ctx.beginPath(); ctx.moveTo(0, RULER - .5); ctx.lineTo(W, RULER - .5); ctx.stroke();
+  ctx.fillStyle = '#555'; ctx.font = '10px sans-serif'; ctx.textAlign = 'left';
+  const step = CW >= 7 ? 10 : CW >= 3 ? 50 : 100;
+  for (let c = Math.ceil(Math.max(1, c0) / step) * step; c <= c1 + 1; c += step) { const x = (c - 1) * CW - sl + CW / 2; ctx.fillRect(x, RULER - 5, 1, 5); ctx.fillText(c, x + 2, 7); }
+}
+function getCenter(g) { if (tc[g] === undefined) tc[g] = (trPane.clientWidth / 2) / (zx * 12); return tc[g]; }
+function drawTrace() {
+  const [ctx, W, H] = fit(trCv, trPane), st = trScroll.scrollTop;
+  for (const p of panels) { if (p.top + p.h < st || p.top > st + H) continue; drawPanel(ctx, W, S.reads[p.id], p.top - st, p.h); }
+}
+function drawPanel(ctx, W, r, y0, h) {
+  ctx.save(); ctx.beginPath(); ctx.rect(0, y0, W, h); ctx.clip();
+  const n = r.seq.length, pos = r.pos, cs = SA.sampleAtCol(r, getCenter(groupOf(r)));
+  const X = s => W / 2 + (s - cs) * zx, s0 = cs - W / 2 / zx - 2, s1 = cs + W / 2 / zx + 2;
+  const mid = i => i <= 0 ? pos[0] - 6 : i >= n ? pos[n - 1] + 6 : (pos[i - 1] + pos[i]) / 2;   // 塩基 i-1 と i の境界
+  ctx.fillStyle = '#eceef0';
+  if (r.clipL > 0) ctx.fillRect(0, y0, Math.max(0, X(mid(r.clipL))), h);
+  if (r.clipR > 0) { const x = X(mid(n - r.clipR)); if (x < W) ctx.fillRect(Math.max(0, x), y0, W, h); }
+  const blk = blockInfo(), hr = blk ? (blk.ids.includes(r.id) ? rangeIn(r, blk.c0, blk.c1) : null) : (sel && sel.kind === 'read' && sel.id === r.id ? selRange() : sel && sel.aln && sel.aln.has(r.id) ? [sel.aln.get(r.id), sel.aln.get(r.id)] : null);
+  if (hr) { const x1 = X(mid(hr[0])), x2 = X(mid(hr[1] + 1)); ctx.fillStyle = sel.hit ? '#ffd993' : '#b9d5ff'; ctx.fillRect(x1, y0, Math.max(2, x2 - x1), h); }
+  else if (sel && sel.kind === 'cons' && r.contig === sel.id) { const [a, b] = selRange(), x1 = X(SA.sampleAtCol(r, a - .5)), x2 = X(SA.sampleAtCol(r, b + .5)); ctx.fillStyle = sel.hit ? '#ffecc4' : '#e1ecff'; ctx.fillRect(x1, y0, Math.max(2, x2 - x1), h); }
+  const LH = 30, tr = SA.traces(r);
+  if (tr) {
+    const yb = y0 + h - 3, sc = (h - LH - 6) / tr.ymax * amp, a0 = Math.max(0, Math.floor(s0)), a1 = Math.min(tr.n - 1, Math.ceil(s1));
+    ctx.lineWidth = 1; ctx.lineJoin = 'round';
+    for (const ch of 'ACGT') {
+      const a = tr[ch]; ctx.strokeStyle = COL[ch]; ctx.beginPath();
+      for (let s = a0; s <= a1; s++) { const y = Math.max(y0 + LH - 2, yb - a[s] * sc); if (s === a0) ctx.moveTo(X(s), y); else ctx.lineTo(X(s), y); }
+      ctx.stroke();
+    }
+  }
+  const cg = r.contig ? SA.getContig(S, r.contig) : null, cons = cg ? cg.cons : null, spx = r.tn / n * zx, letters = spx >= 6;
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.font = '13px Consolas,"Courier New",monospace';
+  for (let i = Math.max(0, SA.lowerBound(pos, s0) - 1); i < n && pos[i] <= s1; i++) {
+    const x = X(pos[i]), ch = r.seq[i], clipped = i < r.clipL || i >= n - r.clipR, col = SA.colOf(r, i);
+    if (!clipped && cons && cons[col] !== '-' && cons[col] !== ch) { ctx.fillStyle = '#ff9d8c'; ctx.fillRect(x - 5, y0 + 1, 10, 15); }
+    ctx.fillStyle = clipped ? '#a9adb3' : (COL[ch] || '#a0a');
+    if (letters) ctx.fillText(ch, x, y0 + 9); else ctx.fillRect(x, y0 + 4, 1, 8);
+    if (r.ed[i]) ctx.fillRect(x - 4, y0 + 15, 8, 1.5);
+    if (r.kind === 'ab1') { const q = Math.min(60, r.qual[i]); ctx.fillStyle = q < 20 ? '#e8b100' : '#9fb3c8'; ctx.fillRect(x - 1.5, y0 + 29 - q / 5, 3, q / 5); }
+    if (letters && (i + 1) % 10 === 0) { ctx.fillStyle = '#999'; ctx.font = '9px sans-serif'; ctx.fillText(i + 1, x, y0 + 23); ctx.font = '13px Consolas,"Courier New",monospace'; }
+  }
+  ctx.font = '11px sans-serif'; ctx.textAlign = 'left'; const ar = r.rc ? '◀ ' : '▶ ', aw = ctx.measureText(ar).width, tw = aw + ctx.measureText(r.name).width;
+  ctx.fillStyle = 'rgba(255,255,255,.85)'; ctx.fillRect(0, y0 + h - 16, tw + 10, 14);
+  ctx.fillStyle = r.rc ? '#d9480f' : '#1c6fd1'; ctx.fillText(ar, 4, y0 + h - 9);
+  ctx.fillStyle = selRows.has(r.id) ? '#1548b5' : '#333'; ctx.fillText(r.name, 4 + aw, y0 + h - 9);
+  ctx.restore(); ctx.strokeStyle = '#c9ced3'; ctx.beginPath(); ctx.moveTo(0, y0 + h - .5); ctx.lineTo(W, y0 + h - .5); ctx.stroke();
+}
+
+/* ---------- 選択と連動 ---------- */
+function selInfo() {
+  if (!sel) return '';
+  const blk = blockInfo();
+  if (mode === 'aln' && sel.aln && sel.aln.size) return `位置調整: ${sel.aln.size + 1} 本を選択（紫の線の位置）  - / Space＝ギャップを入れる、Delete / BackSpace＝直前のギャップを詰める`;
+  if (blk) return `ブロック選択:${blk.ids.length} 行 × 列 ${blk.c0 + 1}–${blk.c1 + 1}（${blk.c1 - blk.c0 + 1} カラム）  置換・削除が可能`;
+  const [a, b] = selRange();
+  if (sel.kind === 'cons') { const cg = SA.getContig(S, sel.id); return `${cg.name} コンセンサス  列 ${a + 1}${b > a ? '–' + (b + 1) : ''} / ${cg.width}  ${a === b ? (cg.cons[a] || '-') : ''}`; }
+  const r = S.reads[sel.id];
+  if (sel.gap !== undefined) return `${SA.dispName(r)}  ギャップ（列 ${sel.gap + 1}）  塩基キーでここに塩基を入力（詰めるのは「位置調整」モード）`;
+  return `${SA.dispName(r)}  塩基${a + 1}${b > a ? '–' + (b + 1) + '（' + (b - a + 1) + '塩基）' : ''} / ${r.seq.length}` + (a === b ? `  ${r.seq[a]}  Q${r.qual[a]}` : '') + (r.contig ? `  列 ${r.cols[sel.b] + 1}` : '');
+}
+function selCol() { return sel.kind === 'cons' ? sel.b : sel.gap !== undefined ? sel.gap : SA.colOf(S.reads[sel.id], sel.b); }
+function selGroup() { return sel.kind === 'cons' ? sel.id : groupOf(S.reads[sel.id]); }
+function setSel(kind, id, a, b, src) {
+  if (mode === 'aln' && kind === 'read') a = b;   // 位置調整モードでは横方向の範囲を持たせない（位置だけ指定）
+  sel = { kind, id, a, b }; activeG = selGroup();
+  if (src !== 'trace') { tc[activeG] = selCol(); if (kind === 'read') showPanel(id); }
+  if (src !== 'seq') showSeq(src === 'trace' || src === 'ovw');
+  updateSlider(); status(selInfo()); req();
+}
+function showPanel(id) { const p = panels.find(p => p.id === id); if (!p) return; const st = trScroll.scrollTop, H = trPane.clientHeight; if (p.top < st) trScroll.scrollTop = p.top; else if (p.top + p.h > st + H) trScroll.scrollTop = p.top + p.h - H; }
+function showSeq(center) {
+  const col = selCol(), W = seqView.clientWidth, x = col * CW, sl = seqScroll.scrollLeft;
+  if (center || x < sl + CW || x > sl + W - 3 * CW) seqScroll.scrollLeft = Math.max(0, x - W / 2);
+  const ri = rows.findIndex(row => row.id === sel.id), y = ri * RH, st = seqScroll.scrollTop, H = seqView.clientHeight - RULER - 18;
+  if (ri >= 0) { if (y < st) seqScroll.scrollTop = y; else if (y + RH > st + H) seqScroll.scrollTop = y + RH - H; }
+}
+function updateSlider() {
+  const g = activeG; slider.disabled = !g; if (!g) { $('trLabel').textContent = '波形位置'; return; }
+  const cg = SA.getContig(S, g); slider.max = Math.max(1, groupWidth(g) - 1); slider.value = getCenter(g);
+  $('trLabel').textContent = '波形位置: ' + (cg ? cg.name : SA.dispName(S.reads[g]));
+}
+function seqHit(ev) {
+  const rc = seqScroll.getBoundingClientRect(), px = ev.clientX - rc.left, py = ev.clientY - rc.top;
+  if (px > seqScroll.clientWidth || py > seqScroll.clientHeight || py < RULER) return null;
+  const ri = Math.floor((py - RULER + seqScroll.scrollTop) / RH), col = Math.floor((px + seqScroll.scrollLeft) / CW), row = rows[ri];
+  if (!row || row.t === 'hdr') return null;
+  if (row.t === 'cons') { const cg = SA.getContig(S, row.id); return { kind: 'cons', id: row.id, i: Math.max(0, Math.min(cg.width - 1, col)) }; }
+  const r = S.reads[row.id];
+  if (r.cols && mode !== 'aln') {   // 配列内部のギャップをクリック: 右隣の塩基を指しつつ、ギャップのカラムを覚える
+    const i = SA.lowerBound(r.cols, col); if (i > 0 && i < r.seq.length && r.cols[i] !== col) return { kind: 'read', id: row.id, i, col, gap: col };
+  }
+  return { kind: 'read', id: row.id, i: SA.nearestIdx(r, col), col };
+}
+/* ブロック選択: 同じコンティグ内の複数行 × カラム範囲。sel.id=起点の配列, sel.id2=反対側の配列, sel.ca/cb=カラム */
+function blockInfo() {
+  if (!sel || sel.kind !== 'read' || !sel.id2 || sel.id2 === sel.id) return null;
+  const r1 = S.reads[sel.id], r2 = S.reads[sel.id2]; if (!r1 || !r2 || !r1.contig || r1.contig !== r2.contig) return null;
+  const cg = SA.getContig(S, r1.contig), k1 = cg.members.indexOf(sel.id), k2 = cg.members.indexOf(sel.id2);
+  return { ids: cg.members.slice(Math.min(k1, k2), Math.max(k1, k2) + 1), c0: Math.max(0, Math.min(sel.ca, sel.cb)), c1: Math.min(cg.width - 1, Math.max(sel.ca, sel.cb)) };
+}
+function rangeIn(r, c0, c1) { const i0 = SA.lowerBound(r.cols, c0), i1 = SA.lowerBound(r.cols, c1 + 1) - 1; return i1 >= i0 ? [i0, i1] : null; }
+function blockOps(blk) { return blk.ids.map(id => [id, rangeIn(S.reads[id], blk.c0, blk.c1)]).filter(x => x[1]); }
+function blockTo(h) {
+  if (!sel || sel.kind !== 'read' || h.kind !== 'read' || h.col === undefined || h.id === sel.id) return false;
+  const r1 = S.reads[sel.id], r2 = S.reads[h.id]; if (!r1.contig || r1.contig !== r2.contig) return false;
+  if (mode === 'aln') {   // 位置調整: 起点の行からこの行までを対象にする
+    const m = SA.getContig(S, r1.contig).members, k1 = m.indexOf(sel.id), k2 = m.indexOf(h.id);
+    sel.aln = alnPick(m.slice(Math.min(k1, k2), Math.max(k1, k2) + 1)); status(selInfo()); req(); return true;
+  }
+  sel.id2 = h.id; sel.ca = r1.cols[sel.a]; sel.cb = h.col; status(selInfo()); req(); return true;
+}
+function trHit(ev) {
+  const rc = trScroll.getBoundingClientRect(), px = ev.clientX - rc.left, py = ev.clientY - rc.top + trScroll.scrollTop;
+  if (px > trScroll.clientWidth) return null;
+  const p = panels.find(p => py >= p.top && py < p.top + p.h); if (!p) return null;
+  const r = S.reads[p.id], s = SA.sampleAtCol(r, getCenter(groupOf(r))) + (px - trPane.clientWidth / 2) / zx;
+  let i = SA.lowerBound(r.pos, s); if (i >= r.seq.length) i = r.seq.length - 1; else if (i > 0 && s - r.pos[i - 1] < r.pos[i] - s) i--;
+  return { kind: 'read', id: p.id, i };
+}
+function bindSelect(el, hit, src) {
+  let drag = false;
+  el.addEventListener('mousedown', ev => {
+    if (ev.button !== 0) return; const h = hit(ev); if (!h) return;
+    if (mode === 'aln' && (ev.ctrlKey || ev.metaKey)) { if (alnToggle(h)) ev.preventDefault(); return; }   // 離れた行の追加／解除（ドラッグは始めない）
+    if (ev.shiftKey && blockTo(h)) { /* ブロック選択 */ }
+    else if (ev.shiftKey && sel && sel.kind === h.kind && sel.id === h.id) setSel(h.kind, h.id, sel.a, h.i, src);
+    else { setSel(h.kind, h.id, h.i, h.i, src); if (h.gap !== undefined) { sel.gap = h.gap; status(selInfo()); req(); } }
+    drag = true; ev.preventDefault(); document.activeElement && document.activeElement.blur();
+  });
+  window.addEventListener('mousemove', ev => {
+    if (!drag || !sel) return; const h = hit(ev); if (!h || blockTo(h)) return;
+    if (h.kind === sel.kind && h.id === sel.id && (sel.id2 || sel.aln || (mode !== 'aln' && h.i !== sel.b))) { delete sel.id2; delete sel.aln; delete sel.gap; if (mode !== 'aln') sel.b = h.i; status(selInfo()); req(); }
+  });
+  window.addEventListener('mouseup', () => { drag = false; });
+}
+bindSelect(seqScroll, seqHit, 'seq'); bindSelect(trScroll, trHit, 'trace');
+seqScroll.addEventListener('scroll', req); trScroll.addEventListener('scroll', req);
+names.addEventListener('wheel', ev => { seqScroll.scrollTop += ev.deltaY; });
+seqScroll.addEventListener('wheel', ev => { if (ev.ctrlKey) { ev.preventDefault(); zoom(ev.deltaY < 0 ? 'cw+' : 'cw-'); } }, { passive: false });
+trScroll.addEventListener('wheel', ev => {
+  if (ev.ctrlKey) { ev.preventDefault(); zoom(ev.deltaY < 0 ? 'zx+' : 'zx-'); }
+  else if (ev.altKey) { ev.preventDefault(); zoom(ev.deltaY < 0 ? 'amp+' : 'amp-'); }
+  else if (ev.shiftKey || Math.abs(ev.deltaX) > Math.abs(ev.deltaY)) {
+    ev.preventDefault(); const d = (ev.shiftKey ? ev.deltaY || ev.deltaX : ev.deltaX) / (zx * 12);
+    const gs = new Set(panels.map(p => groupOf(S.reads[p.id]))); for (const g of gs) tc[g] = Math.max(0, Math.min(groupWidth(g), getCenter(g) + d));
+    updateSlider(); req();
+  }
+}, { passive: false });
+slider.addEventListener('input', () => { if (activeG) { tc[activeG] = +slider.value; req(); } });
+function zoom(z) {
+  const f = z.endsWith('+') ? 1.25 : 0.8;
+  if (z.startsWith('cw')) { const c = seqScroll.scrollLeft / CW; CW = Math.max(2, Math.min(24, Math.round(CW * f + (f > 1 ? .5 : -.5)))); rebuild(); seqScroll.scrollLeft = c * CW; }
+  else if (z.startsWith('zx')) zx = Math.max(0.05, Math.min(8, zx * f));
+  else if (z.startsWith('amp')) amp = Math.max(0.1, Math.min(50, amp * f));
+  else { PH = Math.max(50, Math.min(400, Math.round(PH * f))); rebuild(); }
+  req();
+}
+for (const b of document.querySelectorAll('[data-z]')) b.onclick = () => zoom(b.dataset.z);
+
+/* ---------- 行選択・並べ替え ---------- */
+names.addEventListener('click', ev => {
+  const d = ev.target.closest('.nm'), row = d && rows[d.dataset.ri];
+  if (!row || !row.id) { if (!ev.ctrlKey && !ev.shiftKey) { selRows.clear(); refreshSelClasses(); req(); } return; }
+  const ri = +d.dataset.ri;
+  if (ev.shiftKey && rowAnchor !== null) { if (!ev.ctrlKey) selRows.clear(); const lo = Math.min(ri, rowAnchor), hi = Math.max(ri, rowAnchor); for (let i = lo; i <= hi; i++) if (rows[i] && rows[i].id) selRows.add(rows[i].id); }
+  else if (ev.ctrlKey) { if (selRows.has(row.id)) selRows.delete(row.id); else selRows.add(row.id); rowAnchor = ri; }
+  else { selRows.clear(); selRows.add(row.id); rowAnchor = ri; }
+  if (row.t === 'read') { activeG = groupOf(S.reads[row.id]); showPanel(row.id); } else activeG = row.id;
+  updateSlider(); refreshSelClasses(); req(); status(selRows.size + ' 行を選択');
+});
+names.addEventListener('dblclick', ev => {
+  const d = ev.target.closest('.nm'), row = d && rows[d.dataset.ri]; if (!row || !row.id) return;
+  const obj = row.t === 'cons' ? SA.getContig(S, row.id) : S.reads[row.id], nv = prompt('名前', obj.name);
+  if (nv && nv.trim() && nv !== obj.name) { pushUndo(); (row.t === 'cons' ? SA.getContig(S, row.id) : S.reads[row.id]).name = nv.trim(); rebuild(); }
+});
+let dragKeys = null;
+names.addEventListener('dragstart', ev => {
+  const d = ev.target.closest('.nm'), row = d && rows[d.dataset.ri]; if (!row || !row.id) { ev.preventDefault(); return; }
+  dragKeys = selRows.has(row.id) ? rows.filter(x => x.id && selRows.has(x.id) && x.t === row.t).map(x => x.id) : [row.id];
+  ev.dataTransfer.setData('text/x-sanger', '1'); ev.dataTransfer.effectAllowed = 'move';
+});
+function clearDropMarks() { for (const d of names.querySelectorAll('.dropA,.dropB')) d.classList.remove('dropA', 'dropB'); }
+names.addEventListener('dragover', ev => {
+  if (!dragKeys) return; const d = ev.target.closest('.nm'); clearDropMarks(); if (!d || !rows[d.dataset.ri] || !rows[d.dataset.ri].id) return;
+  ev.preventDefault(); const rc = d.getBoundingClientRect(); d.classList.add(ev.clientY - rc.top > rc.height / 2 ? 'dropA' : 'dropB');
+});
+names.addEventListener('dragleave', clearDropMarks);
+names.addEventListener('dragend', () => { dragKeys = null; clearDropMarks(); });
+names.addEventListener('drop', ev => {
+  if (!dragKeys) return; ev.preventDefault(); ev.stopPropagation();
+  const d = ev.target.closest('.nm'), row = d && rows[d.dataset.ri], keys = dragKeys; dragKeys = null; clearDropMarks(); if (!row || !row.id) return;
+  const rc = d.getBoundingClientRect(), after = ev.clientY - rc.top > rc.height / 2;
+  moveRows(keys, row, after);
+});
+function moveRows(keys, target, after) {
+  const move = (list, tid, aft) => { const rest = list.filter(x => !keys.includes(x)); let k = tid === null ? 0 : rest.indexOf(tid); if (k < 0) return null; if (tid !== null && aft) k++; rest.splice(k, 0, ...list.filter(x => keys.includes(x))); return rest; };
+  if (S.reads[keys[0]]) {   // 配列の移動
+    const g = S.reads[keys[0]].contig; if (!keys.every(k => S.reads[k].contig === g)) return status('異なるグループの配列は同時に移動できません');
+    let tid; if (target.t === 'read') { if (S.reads[target.id].contig !== g) return status('順番の入れ替えは同じコンティグ内／未結合内のみです'); tid = target.id; if (keys.includes(tid)) return; }
+    else { if (target.id !== g) return status('順番の入れ替えは同じコンティグ内／未結合内のみです'); tid = null; }
+    const cg = g ? SA.getContig(S, g) : null, nl = move(cg ? cg.members : S.free, tid, after); if (!nl) return;
+    pushUndo(); if (g) SA.getContig(S, g).members = nl; else S.free = nl;
+  } else {                  // コンティグの移動
+    const tg = target.t === 'cons' ? target.id : S.reads[target.id].contig; if (!tg || keys.includes(tg)) return;
+    const ids = S.contigs.map(c => c.id), nl = move(ids, tg, after || target.t === 'read'); if (!nl) return;
+    pushUndo(); S.contigs = nl.map(id => SA.getContig(S, id));
+  }
+  rebuild();
+}
+
+/* ---------- 編集 ---------- */
+function setMode(m) { if (m !== 'aln' && sel && sel.aln) { delete sel.aln; req(); } mode = m; $('mRep').classList.toggle('on', m === 'rep'); $('mIns').classList.toggle('on', m === 'ins'); $('mAln').classList.toggle('on', m === 'aln'); }
+$('mRep').onclick = () => setMode('rep'); $('mIns').onclick = () => setMode('ins');
+$('mAln').onclick = () => {
+  setMode('aln');
+  if (sel && sel.kind === 'read') {   // 横方向の範囲は左端の1カラムに畳む（範囲ごと削除する操作に見えないように）。ブロック選択は配列ごとの位置に置き換える
+    const blk = blockInfo(), r = S.reads[sel.id]; delete sel.hit;
+    if (blk) { sel.a = sel.b = Math.min(r.seq.length - 1, SA.lowerBound(r.cols, blk.c0)); delete sel.id2; sel.aln = alnPick(blk.ids); } else sel.a = sel.b = Math.min(sel.a, sel.b);
+    req();
+  }
+  status('位置調整: コンティグ内の塩基を選択し、- / Space でその前にギャップを入れる、Delete / BackSpace で直前のギャップを詰める（その配列だけが動き、塩基は変わりません）。縦ドラッグ・Shift+クリック・Ctrl+クリックで複数配列を同時に動かせます');
+};
+/* 位置調整の対象。sel.aln = Map(配列id → 塩基添字)。カラムでなく塩基で持つので、動かした後も同じ塩基を指し続ける */
+function alnPick(ids) {
+  const c = S.reads[sel.id].cols[sel.a], m = new Map();
+  for (const id of ids) if (id !== sel.id) { const q = S.reads[id], i = SA.lowerBound(q.cols, c); if (i < q.seq.length) m.set(id, i); }
+  return m;
+}
+function alnTargets() { return [[sel.id, Math.min(sel.a, sel.b)], ...(sel.aln || [])]; }
+function alnToggle(h) {   // Ctrl+クリック: 離れた行を対象に追加／解除
+  if (!sel || sel.kind !== 'read' || h.kind !== 'read' || h.id === sel.id) return false;
+  const r1 = S.reads[sel.id], r2 = S.reads[h.id]; if (!r1.contig || r1.contig !== r2.contig) return false;
+  if (!sel.aln) sel.aln = new Map();
+  if (sel.aln.has(h.id)) sel.aln.delete(h.id); else { const m = alnPick([h.id]); if (!m.size) return false; sel.aln.set(h.id, m.get(h.id)); }
+  status(selInfo()); req(); return true;
+}
+function alnShift(d) {
+  if (!sel || sel.kind !== 'read' || !S.reads[sel.id].contig) return status('位置調整はコンティグ内の配列の塩基を選択して行います');
+  if (sel.aln && sel.aln.size) {   // 複数配列: それぞれの対象塩基以降を同じ向きに1カラムずらす
+    const all = alnTargets(), ops = all.filter(([id, i]) => { const q = S.reads[id]; return d > 0 || (i > 0 ? q.cols[i] - q.cols[i - 1] > 1 : q.cols[0] > 0); });   // 詰めるギャップがない配列は動かさない
+    if (!ops.length) return status('選択した配列のどれにも、直前に詰められるギャップがありません');
+    pushUndo(); for (const [id, i] of ops) SA.shiftCols(S, id, i, d, true);
+    SA.compact(S, SA.getContig(S, S.reads[sel.id].contig)); afterEdit();
+    return status(`${ops.length} 本を${d > 0 ? '右' : '左'}へ1カラムずらしました` + (ops.length < all.length ? `（${all.length - ops.length} 本は詰めるギャップがなくそのまま）` : ''));
+  }
+  const [a] = selRange(), r = S.reads[sel.id];
+  if (d < 0 && a > 0 && r.cols[a] - r.cols[a - 1] < 2) return status('選択塩基の直前にギャップがないため、左へは詰められません');
+  pushUndo(); SA.shiftCols(S, sel.id, a, d); afterEdit();
+  status(`${r.name}: 塩基 ${a + 1} 以降を${d > 0 ? '右' : '左'}へ1カラムずらしました`);
+}
+function afterEdit() { rebuild(); if (sel) { activeG = selGroup(); tc[activeG] = selCol(); showSeq(false); updateSlider(); status(selInfo()); } }
+function typeBase(ch, after) {   // after: 挿入モードで選択塩基の後ろに入れる（Shift+塩基キー）
+  if (!sel) return; const [a, b] = selRange(), blk = blockInfo();
+  if (blk) {
+    if (mode !== 'rep') return status('ブロック選択中は置換と削除のみ可能です（挿入は1配列ずつ）');
+    const ops = blockOps(blk); if (!ops.length) return;
+    pushUndo(); for (const [id, [i0, i1]] of ops) SA.editReplace(S, id, i0, i1, ch); rebuild(); return status(`${ops.length} 行の選択範囲を ${ch} に置換しました`);
+  }
+  if (sel.kind === 'cons') { if (mode !== 'rep') return status('コンセンサス行は置換のみ可能です'); pushUndo(); SA.editCons(S, sel.id, a, b, ch); return afterEdit(); }
+  pushUndo();
+  if (sel.gap !== undefined) { SA.editInsert(S, sel.id, a, ch, 'L', sel.gap); delete sel.gap; return afterEdit(); }   // ギャップを塩基にする（置換・挿入どちらのモードでも同じ。入れた塩基が選択される）
+  if (mode === 'rep') SA.editReplace(S, sel.id, a, b, ch);
+  else if (!after) { SA.editInsert(S, sel.id, a, ch, 'L'); sel.a++; sel.b++; }
+  else { SA.editInsert(S, sel.id, b + 1, ch, 'R'); sel.a = sel.b = b + 1; }
+  afterEdit();
+}
+function delSel() {
+  if (!sel) return; if (sel.kind === 'cons') return status('コンセンサス行は削除できません（置換のみ）');
+  if (sel.gap !== undefined) return status('ギャップを詰めるには「位置調整」モードにして Delete / BackSpace を押します');
+  const blk = blockInfo();
+  if (blk) {   // 添字範囲は削除前にまとめて求める（削除のたびにカラム番号が詰まるため）
+    const ops = blockOps(blk).filter(x => x[1][1] - x[1][0] + 1 < S.reads[x[0]].seq.length); if (!ops.length) return status('削除できる塩基がありません');
+    pushUndo(); for (const [id, [i0, i1]] of ops) SA.editDelete(S, id, i0, i1);
+    const me = ops.find(x => x[0] === sel.id), i = Math.min(me ? me[1][0] : sel.a, S.reads[sel.id].seq.length - 1);
+    sel = { kind: 'read', id: sel.id, a: i, b: i }; afterEdit(); return status(`${ops.length} 行からブロックを削除しました`);
+  }
+  const [a, b] = selRange(), r = S.reads[sel.id]; if (b - a + 1 >= r.seq.length) return status('配列全体は削除できません（「配列を閉じる」を使用）');
+  pushUndo(); SA.editDelete(S, sel.id, a, b); const n = S.reads[sel.id].seq.length; sel.a = sel.b = Math.min(a, n - 1); afterEdit();
+}
+function moveSel(d, ext) {
+  if (!sel) return; const max = (sel.kind === 'cons' ? SA.getContig(S, sel.id).width : S.reads[sel.id].seq.length) - 1;
+  const from = sel.gap !== undefined && d === 1 ? sel.b - 1 : sel.b;   // ギャップからは左右の隣の塩基へ
+  const nb = Math.max(0, Math.min(max, d === 'home' ? 0 : d === 'end' ? max : from + d));
+  setSel(sel.kind, sel.id, ext ? sel.a : nb, nb, 'key');
+}
+function moveRow(d) {
+  if (!sel) return; let ri = rows.findIndex(row => row.id === sel.id); const col = selCol();
+  for (ri += d; ri >= 0 && ri < rows.length; ri += d) {
+    const row = rows[ri]; if (row.t === 'hdr') continue;
+    if (row.t === 'cons') { const cg = SA.getContig(S, row.id), c = Math.min(cg.width - 1, col); return setSel('cons', row.id, c, c, 'key'); }
+    const i = SA.nearestIdx(S.reads[row.id], col); return setSel('read', row.id, i, i, 'key');
+  }
+}
+let shiftDown = false;   // 挿入位置の縦線を前後どちらに出すか
+const setShift = v => { if (v !== shiftDown) { shiftDown = v; if (mode === 'ins') req(); } };
+document.addEventListener('keyup', ev => { if (ev.key === 'Shift') setShift(false); });
+window.addEventListener('blur', () => setShift(false));
+document.addEventListener('keydown', ev => {
+  if (ev.key === 'Shift') setShift(true);
+  if (/^(INPUT|SELECT|TEXTAREA)$/.test(ev.target.tagName) && ev.target.type !== 'range') return;
+  const k = ev.key;
+  if (ev.ctrlKey || ev.metaKey) {
+    const l = k.toLowerCase();
+    if (l === 'z') { ev.preventDefault(); ev.shiftKey ? doRedo() : doUndo(); } else if (l === 'y') { ev.preventDefault(); doRedo(); }
+    else if (l === 's') { ev.preventDefault(); saveProject(); } else if (l === 'o') { ev.preventDefault(); openDialog(); }
+    else if (l === 'c') { ev.preventDefault(); doCopy(); }
+    else if (l === 'f') { ev.preventDefault(); $('q').focus(); $('q').select(); }
+    return;
+  }
+  if (ev.altKey) return;
+  if (k === 'ArrowLeft') { ev.preventDefault(); moveSel(-1, ev.shiftKey); } else if (k === 'ArrowRight') { ev.preventDefault(); moveSel(1, ev.shiftKey); }
+  else if (k === 'ArrowUp') { ev.preventDefault(); moveRow(-1); } else if (k === 'ArrowDown') { ev.preventDefault(); moveRow(1); }
+  else if (k === 'Home') { ev.preventDefault(); moveSel('home', ev.shiftKey); } else if (k === 'End') { ev.preventDefault(); moveSel('end', ev.shiftKey); }
+  else if (mode === 'aln' && (k === '-' || k === ' ')) { ev.preventDefault(); alnShift(1); }
+  else if (mode === 'aln' && (k === 'Delete' || k === 'Backspace')) { ev.preventDefault(); alnShift(-1); }
+  else if (mode === 'aln' && k.length === 1 && SA.IUPAC.includes(k.toUpperCase())) { ev.preventDefault(); status('位置調整モードでは塩基を変更できません（置換・挿入モードに切り替えてください）'); }
+  else if (k === 'Delete' || k === 'Backspace' || k === '-') { ev.preventDefault(); delSel(); }
+  else if (k === 'Insert') { ev.preventDefault(); setMode(mode === 'rep' ? 'ins' : 'rep'); }
+  else if (k === 'Escape') { sel = null; selRows.clear(); $('help').style.display = 'none'; refreshSelClasses(); status(''); req(); }
+  else if (k.length === 1 && SA.IUPAC.includes(k.toUpperCase())) { ev.preventDefault(); typeBase(k.toUpperCase(), ev.shiftKey); }
+});
+
+/* ---------- 検索 ---------- */
+const QC = { A: 'A', C: 'C', G: 'G', T: 'T', R: '[AG]', Y: '[CT]', K: '[GT]', M: '[AC]', S: '[CG]', W: '[AT]', B: '[CGT]', D: '[AGT]', H: '[ACT]', V: '[ACG]', N: '.' };
+function findHits(q) {
+  const mk = s => new RegExp([...s].map(c => QC[c]).join(''), 'g'), pats = [mk(q)], rq = SA.revcompStr(q); if (rq !== q) pats.push(mk(rq));
+  const hits = [], seen = new Set();
+  const scan = (text, ri, kind, id, map) => { for (const re of pats) { re.lastIndex = 0; let m; while ((m = re.exec(text))) { const a = m.index, b = a + q.length - 1, key = ri + ':' + a; if (!seen.has(key)) { seen.add(key); hits.push({ ri, kind, id, a: map ? map[a] : a, b: map ? map[b] : b }); } re.lastIndex = a + 1; } } };
+  rows.forEach((row, ri) => {
+    if (row.t === 'cons') { const cons = SA.getContig(S, row.id).cons, map = []; let s = ''; for (let c = 0; c < cons.length; c++) if (cons[c] !== '-') { s += cons[c]; map.push(c); } scan(s, ri, 'cons', row.id, map); }
+    else if (row.t === 'read') scan(S.reads[row.id].seq, ri, 'read', row.id, null);
+  });
+  return hits.sort((x, y) => x.ri - y.ri || x.a - y.a);
+}
+function doFind(dir) {
+  const q = $('q').value.toUpperCase().replace(/U/g, 'T').replace(/[^ACGTRYKMSWBDHVN]/g, '');
+  if (q.length < 2) return status('検索する塩基配列を2文字以上入力してください');
+  const hits = findHits(q); if (!hits.length) return status(`「${q}」は見つかりませんでした（相補鎖側も検索済み）`);
+  let k = dir > 0 ? 0 : hits.length - 1;
+  if (sel) {
+    const ri = rows.findIndex(r => r.id === sel.id), a = Math.min(sel.a, sel.b);
+    if (dir > 0) { k = hits.findIndex(h => h.ri > ri || (h.ri === ri && h.a > a)); if (k < 0) k = 0; }
+    else { k = hits.length - 1; for (let i = hits.length - 1; i >= 0; i--) if (hits[i].ri < ri || (hits[i].ri === ri && hits[i].a < a)) { k = i; break; } }
+  }
+  const h = hits[k]; setSel(h.kind, h.id, h.a, h.b, 'ovw'); sel.hit = true;
+  // ヒット範囲の中央を画面中央へ。画面より長いヒットは先頭を左端に寄せる
+  const cA = h.kind === 'cons' ? h.a : SA.colOf(S.reads[h.id], h.a), cB = h.kind === 'cons' ? h.b : SA.colOf(S.reads[h.id], h.b), mid = (cA + cB) / 2;
+  const W = seqView.clientWidth, vc = trPane.clientWidth / (zx * 12);
+  seqScroll.scrollLeft = Math.max(0, (cB - cA + 1) * CW > W - 4 * CW ? (cA - 2) * CW : (mid + .5) * CW - W / 2);
+  tc[activeG] = cB - cA + 1 > vc - 4 ? cA - 2 + vc / 2 : mid; updateSlider(); req();
+  status(`検索「${q}」 ${k + 1} / ${hits.length} 件目 ─ ` + selInfo());
+}
+$('q').addEventListener('keydown', ev => { if (ev.key === 'Enter') { ev.preventDefault(); doFind(ev.shiftKey ? -1 : 1); } else if (ev.key === 'Escape') ev.target.blur(); });
+$('bFindN').onclick = () => doFind(1); $('bFindP').onclick = () => doFind(-1);
+
+/* ---------- ツールバー操作 ---------- */
+function targetReads() {   // 行選択の配列ID（コンティグ行は構成配列に展開）。行未選択なら塩基選択中の配列
+  const ids = []; const add = id => { if (!ids.includes(id)) ids.push(id); };
+  for (const row of rows) if (row.id && selRows.has(row.id)) { if (row.t === 'cons') SA.getContig(S, row.id).members.forEach(add); else add(row.id); }
+  if (!ids.length && sel) { if (sel.kind === 'read') add(sel.id); else SA.getContig(S, sel.id).members.forEach(add); }
+  return ids;
+}
+const PRE = { strict: [50, 97], normal: [30, 92], loose: [20, 80] };
+$('preset').onchange = () => { const p = PRE[$('preset').value]; if (p) { $('minOv').value = p[0]; $('minId').value = p[1]; } };
+$('minOv').oninput = $('minId').oninput = () => { $('preset').value = 'custom'; };
+$('bAsm').onclick = () => {
+  const ids = []; for (const row of rows) if (row.id && selRows.has(row.id)) { if (row.t === 'cons') ids.push(...SA.getContig(S, row.id).members); else ids.push(row.id); }
+  const all = ids.length === 0;
+  if (Object.keys(S.reads).length < 2) return status('配列が2本以上必要です');
+  if (all && S.contigs.length && !confirm('行が選択されていないので、既存のコンティグをいったん解体して全配列をアセンブルし直します。よろしいですか？\n（一部だけ追加で結合したい場合は、対象の行を選択してから実行してください）')) return;
+  const opt = { minOverlap: Math.max(10, +$('minOv').value || 30), minIdent: Math.min(100, Math.max(50, +$('minId').value || 92)) / 100 };
+  status('アセンブル中…');
+  setTimeout(() => {
+    pushUndo(); const t = performance.now(); let res;
+    try { res = SA.assemble(S, all ? null : ids, opt); } catch (e) { console.error(e); restore(undo.pop()); return status('アセンブル中にエラー: ' + e.message); }
+    sel = null; tc = {}; rebuild(); status(`${res.msg}  [重なり≥${opt.minOverlap}, 一致率≥${Math.round(opt.minIdent * 100)}%, ${Math.round(performance.now() - t)} ms]`);
+  }, 20);
+};
+$('bCons').onclick = () => {
+  const cs = S.contigs.filter(c => selRows.has(c.id) || c.members.some(id => selRows.has(id))), list = cs.length ? cs : S.contigs;
+  if (!list.length) return status('コンティグがありません');
+  pushUndo(); for (const c of list) SA.recomputeCons(S, SA.getContig(S, c.id), null); rebuild(); status(`${list.length} 個のコンティグのコンセンサスを更新しました`);
+};
+$('bUnasm').onclick = () => {
+  const cgs = S.contigs.filter(c => selRows.has(c.id)), ids = [...selRows].filter(k => S.reads[k] && S.reads[k].contig);
+  if (!cgs.length && !ids.length) return status('コンティグ内の配列（またはコンティグ行）を選択してください');
+  pushUndo(); for (const c of cgs) SA.dissolve(S, SA.getContig(S, c.id)); SA.removeFromContig(S, ids); sel = null; tc = {}; rebuild(); status('コンティグから外しました');
+};
+$('bRC').onclick = () => {
+  const ids = targetReads(); if (!ids.length) return status('相補鎖にする配列を選択してください');
+  pushUndo(); if (sel) delete sel.id2; const done = new Set(); let nc = 0, nr = 0;
+  for (const id of ids) {
+    const r = S.reads[id], g = groupOf(r); if (done.has(g)) continue; done.add(g);
+    const w = groupWidth(g); if (tc[g] !== undefined) tc[g] = w - 1 - tc[g];
+    if (r.contig) { SA.flipContig(S, SA.getContig(S, g)); nc++; } else { SA.rcRead(r); nr++; }
+    if (sel && selGroup() === g) { const m = (sel.kind === 'cons' ? w : S.reads[sel.id].seq.length) - 1; sel.a = m - sel.a; sel.b = m - sel.b; }
+  }
+  rebuild(); status(`相補鎖にしました（${nc ? 'コンティグ ' + nc + ' 個（構成配列すべて）' : ''}${nc && nr ? '、' : ''}${nr ? '配列 ' + nr + ' 本' : ''}）`);
+};
+function trimOp(side) {
+  if (side === 'L' || side === 'R') {
+    if (!sel || sel.kind !== 'read') return status('トリム境界にする塩基を選択してください');
+    const [a, b] = selRange(), r = S.reads[sel.id]; pushUndo();
+    if (!SA.setClip(S, sel.id, side === 'L' ? a : r.clipL, side === 'R' ? r.seq.length - 1 - b : r.clipR)) { undo.pop(); return status('有効範囲がなくなるためトリムできません'); }
+  } else {
+    const ids = targetReads(); if (!ids.length) return status('対象の配列を選択してください'); pushUndo();
+    for (const id of ids) { const r = S.reads[id]; if (side === '0') SA.setClip(S, id, 0, 0); else { const t = { ...r }; SA.autoTrim(t); SA.setClip(S, id, t.clipL, t.clipR); } }
+  }
+  rebuild(); status('トリム範囲を変更しました');
+}
+$('bTrimL').onclick = () => trimOp('L'); $('bTrimR').onclick = () => trimOp('R'); $('bTrimA').onclick = () => trimOp('A'); $('bTrim0').onclick = () => trimOp('0');
+$('bClose').onclick = () => {
+  const ids = [...selRows].filter(k => S.reads[k]); for (const c of S.contigs) if (selRows.has(c.id)) for (const id of c.members) if (!ids.includes(id)) ids.push(id);
+  if (!ids.length) return status('閉じる配列の行を選択してください');
+  if (!confirm(ids.length + ' 本の配列を一覧から削除します。よろしいですか？')) return;
+  pushUndo(); SA.removeReads(S, ids); sel = null; selRows.clear(); rebuild(); status(ids.length + ' 本を閉じました');
+};
+$('bUndo').onclick = doUndo; $('bRedo').onclick = doRedo;
+$('bHelp').onclick = () => { const h = $('help'); h.style.display = h.style.display === 'block' ? 'none' : 'block'; };
+
+/* ---------- 開く ---------- */
+let lastHandle = null;   // 最後に開いた／保存したファイル。保存・開くダイアログの初期フォルダに使う（IndexedDBに保存し次回起動時も使う）
+function idb(mode, fn) {
+  return new Promise((res, rej) => {
+    const o = indexedDB.open('sanger-assembler', 1); o.onupgradeneeded = () => o.result.createObjectStore('kv'); o.onerror = () => rej(o.error);
+    o.onsuccess = () => { const tx = o.result.transaction('kv', mode), rq = fn(tx.objectStore('kv')); tx.oncomplete = () => res(rq && rq.result); tx.onerror = () => rej(tx.error); };
+  });
+}
+function rememberHandle(h) { lastHandle = h; try { idb('readwrite', s => s.put(h, 'last')).catch(() => { }); } catch (e) { } }
+try { idb('readonly', s => s.get('last')).then(h => { if (h && !lastHandle) lastHandle = h; }).catch(() => { }); } catch (e) { }
+async function openDialog() {
+  if (window.showOpenFilePicker) {
+    try { return await openFiles(await window.showOpenFilePicker(lastHandle ? { id: 'sanger', multiple: true, startIn: lastHandle } : { id: 'sanger', multiple: true })); }
+    catch (e) { if (e.name === 'AbortError') return; console.warn(e); if (lastHandle) { lastHandle = null; return openDialog(); } }
+  }
+  $('fIn').click();
+}
+$('bOpen').onclick = openDialog;
+$('fIn').onchange = async ev => { await openFiles([...ev.target.files]); ev.target.value = ''; };
+async function openFiles(list) {   // File または FileSystemFileHandle の配列
+  const items = [];
+  for (const x of list) {
+    if (!x || x.kind === 'directory') continue;
+    const h = x.kind === 'file' && x.getFile ? x : null, f = h ? await h.getFile() : x;
+    if (h) lastHandle = h;
+    items.push({ name: f.name, bytes: new Uint8Array(await f.arrayBuffer()), handle: h });
+  }
+  if (items.some(x => x.handle)) rememberHandle(lastHandle);
+  loadItems(items);
+}
+function loadItems(items) {
+  items.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+  const added = [], errs = [];
+  for (const it of items) {
+    try {
+      const u8 = it.bytes, head = String.fromCharCode(...u8.subarray(0, 4));
+      if (head === 'ABIF' || (u8.length > 132 && String.fromCharCode(...u8.subarray(128, 132)) === 'ABIF')) added.push(SA.readFromAbif(u8, it.name));
+      else {
+        const text = new TextDecoder().decode(u8), t = text.trimStart();
+        if (t[0] === '{') {
+          if (Object.keys(S.reads).length && !confirm('現在の作業内容を閉じてプロジェクト「' + it.name + '」を開きます。よろしいですか？')) continue;
+          S = SA.deserialize(JSON.parse(text)); undo = []; redo = []; sel = null; selRows.clear(); tc = {}; dirty = false; projHandle = it.handle || null; added.length = 0;
+        } else if (t[0] === '>') added.push(...SA.parseFasta(text, it.name));
+        else errs.push(it.name + ': 未対応の形式');
+      }
+    } catch (e) { console.error(e); errs.push(it.name + ': ' + e.message); }
+  }
+  if (added.length) { pushUndo(); for (const r of added) { S.reads[r.id] = r; S.free.push(r.id); } }
+  rebuild();
+  status((added.length ? added.length + ' 本の配列を追加しました。' : '') + (errs.length ? ' 読み込めなかったファイル: ' + errs.join(' / ') : '') || 'プロジェクトを開きました');
+}
+let dragDepth = 0;
+const isFileDrag = ev => ev.dataTransfer && [...ev.dataTransfer.types].includes('Files');
+window.addEventListener('dragenter', ev => { if (isFileDrag(ev)) { dragDepth++; $('drop').style.display = 'flex'; ev.preventDefault(); } });
+window.addEventListener('dragover', ev => { if (isFileDrag(ev)) ev.preventDefault(); });
+window.addEventListener('dragleave', ev => { if (isFileDrag(ev) && --dragDepth <= 0) { dragDepth = 0; $('drop').style.display = 'none'; } });
+window.addEventListener('drop', ev => { if (!isFileDrag(ev)) return; ev.preventDefault(); dragDepth = 0; $('drop').style.display = 'none';
+  const files = [...ev.dataTransfer.files], its = [...ev.dataTransfer.items].filter(i => i.kind === 'file');
+  if (its.length && its[0].getAsFileSystemHandle) Promise.all(its.map(i => i.getAsFileSystemHandle())).then(hs => openFiles(hs.filter(Boolean)), () => openFiles(files));
+  else openFiles(files);
+});
+
+/* ---------- 保存 ---------- */
+function download(blob, name) { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 2000); }
+async function saveAs(blob, name, desc, ext, handle) {
+  if (window.showSaveFilePicker) {
+    try {
+      let h = handle;
+      if (!h) {
+        const o = { id: 'sanger', suggestedName: name, types: [{ description: desc, accept: { [blob.type || 'application/octet-stream']: [ext] } }] };
+        try { h = await window.showSaveFilePicker(lastHandle ? { ...o, startIn: lastHandle } : o); }
+        catch (e) { if (e.name === 'AbortError') return null; h = await window.showSaveFilePicker(o); }
+      }
+      const w = await h.createWritable(); await w.write(blob); await w.close(); rememberHandle(h); return h;
+    } catch (e) { if (e.name === 'AbortError') return null; console.warn(e); }
+  }
+  download(blob, name); return true;
+}
+async function saveProject() {
+  if (!Object.keys(S.reads).length) return status('保存する配列がありません');
+  const blob = new Blob([JSON.stringify(SA.serialize(S))], { type: 'application/json' });
+  const h = await saveAs(blob, 'sanger_project.json', 'Sanger Assembler プロジェクト', '.json', projHandle);
+  if (h) { if (h !== true) projHandle = h; dirty = false; status('プロジェクトを保存しました' + (h !== true ? '（' + h.name + '）' : '（ダウンロードフォルダ）')); }
+}
+$('bSave').onclick = saveProject;
+function pickSeqs(fallbackAll) {   // 選択行の {name, seq}。未選択で fallbackAll なら全コンセンサス（なければ全配列）
+  const trim = $('ckTrim').checked, out = [];
+  const addCons = cg => out.push({ name: cg.name.replace(/\s+/g, '_') + '_consensus', seq: cg.cons.replace(/-/g, '') });
+  const addRead = r => out.push({ name: (r.name + (r.rc ? '_comp' : '')).replace(/\s+/g, '_'), seq: trim ? r.seq.slice(r.clipL, r.seq.length - r.clipR) : r.seq });
+  const picked = rows.filter(row => row.id && selRows.has(row.id));
+  if (picked.length) for (const row of picked) row.t === 'cons' ? addCons(SA.getContig(S, row.id)) : addRead(S.reads[row.id]);
+  else if (fallbackAll) { if (S.contigs.length) S.contigs.forEach(addCons); else rows.forEach(row => row.t === 'read' && addRead(S.reads[row.id])); }
+  return out;
+}
+$('bFasta').onclick = async () => {
+  const list = pickSeqs(true), n = list.length;
+  if (!n) return status('書き出す配列がありません');
+  const h = await saveAs(new Blob([list.map(x => SA.fastaOf(x.name, x.seq)).join('')], { type: 'text/plain' }), (n === 1 ? list[0].name : 'sequences') + '.fasta', 'FASTA', '.fasta');
+  if (h) status(n + ' 配列をFASTAで書き出しました');
+};
+async function copyText(text) {
+  try { await navigator.clipboard.writeText(text); return true; } catch (e) {
+    const ta = document.createElement('textarea'); ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0'; document.body.appendChild(ta); ta.select();
+    let ok = false; try { ok = document.execCommand('copy'); } catch (e2) { } ta.remove(); return ok;
+  }
+}
+/* 行選択あり: 1行なら配列のみ、複数行ならFASTA。行選択なし: 選択中の塩基範囲（コンセンサス行ならギャップを除く） */
+async function doCopy() {
+  const list = pickSeqs(false); let text, msg;
+  if (list.length === 1) { text = list[0].seq; msg = `${list[0].name}（${text.length} 塩基）`; }
+  else if (list.length > 1) { text = list.map(x => SA.fastaOf(x.name, x.seq)).join(''); msg = `${list.length} 配列（FASTA形式）`; }
+  else if (blockInfo()) { const ops = blockOps(blockInfo()); text = ops.map(([id, [i0, i1]]) => SA.fastaOf(S.reads[id].name + (S.reads[id].rc ? '_comp' : ''), S.reads[id].seq.slice(i0, i1 + 1))).join(''); msg = `ブロック ${ops.length} 行（FASTA形式）`; }
+  else if (sel) { const [a, b] = selRange(); text = sel.kind === 'cons' ? SA.getContig(S, sel.id).cons.slice(a, b + 1).replace(/-/g, '') : S.reads[sel.id].seq.slice(a, b + 1); msg = `選択範囲 ${text.length} 塩基`; }
+  else return status('コピーする行（配列名・コンセンサス名）または塩基範囲を選択してください');
+  status((await copyText(text)) ? msg + ' をコピーしました' : 'クリップボードへのコピーに失敗しました');
+}
+$('bCopy').onclick = doCopy;
+$('bAb1').onclick = async () => {
+  const rs = targetReads().map(id => S.reads[id]).filter(r => r.ab1);
+  if (!rs.length) return status('AB1として書き出す配列（.ab1由来）を選択してください');
+  let n = 0;
+  for (const r of rs) {
+    const blob = new Blob([SA.exportAb1(r)], { type: 'application/octet-stream' }), name = r.name + (r.rc ? '_comp' : '') + '_edited.ab1';
+    if (rs.length === 1) { if (await saveAs(blob, name, 'ABIF', '.ab1')) n++; } else { download(blob, name); n++; await new Promise(res => setTimeout(res, 300)); }
+  }
+  if (n) status(n + ' 本を .ab1 で書き出しました');
+};
+window.addEventListener('beforeunload', ev => { if (dirty) { ev.preventDefault(); ev.returnValue = ''; } });
+
+/* ---------- レイアウト ---------- */
+(function () {
+  let drag = false;
+  $('split').addEventListener('mousedown', ev => { drag = true; ev.preventDefault(); });
+  window.addEventListener('mousemove', ev => { if (!drag) return; const m = $('main').getBoundingClientRect(); $('seqPane').style.height = Math.max(60, Math.min(m.height - 120, ev.clientY - m.top)) + 'px'; req(); });
+  window.addEventListener('mouseup', () => { drag = false; });
+})();
+new ResizeObserver(req).observe(seqView); new ResizeObserver(req).observe(trPane);
+rebuild();
+
+/* テスト用: http(s)で開いた場合のみ ?load=a.ab1,b.ab1 で同じフォルダのファイルを読み込む */
+window.SAui = { get S() { return S; }, loadItems, get sel() { return sel; }, get rows() { return rows; }, draw() { drawOvw(); drawSeq(); drawTrace(); } };
+if (location.protocol.startsWith('http')) {
+  const q = new URLSearchParams(location.search).get('load');
+  if (q) Promise.all(q.split(',').map(async u => ({ name: u.split('/').pop(), bytes: new Uint8Array(await (await fetch(u)).arrayBuffer()) }))).then(loadItems);
+}
+})();
+</script>
+</body>
+</html>
