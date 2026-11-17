@@ -2,6 +2,7 @@
 <html lang="ja">
 <head>
 <meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Sanger Assembler</title>
 <style>
 *{box-sizing:border-box}
@@ -52,6 +53,37 @@ input[type=number]{width:52px}
 #ovwBox{flex:1;position:relative;min-width:0;cursor:pointer}
 #ovwBox canvas{position:absolute;left:0;top:0}
 #empty{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#889;font-size:16px;pointer-events:none}
+/* スマホ・タブレット（指で操作する端末）だけに効く閲覧用の調整。マウス環境の表示は変えない */
+@media (pointer:coarse){
+  html,body{height:100dvh;overscroll-behavior:none}
+  /* 上部は3つに分ける（起動時にスクリプトが組み替える）。
+     #tbTop: 常に出す1段（開く・Assemble・「表示」「メニュー」の開閉ボタン・？）
+     #tb2:   表示倍率と検索の段（「表示」で開閉）
+     #tb:    残りのボタン（「メニュー」で開閉。折り返して全部見せる） */
+  #tbTop{flex:none;display:flex;gap:4px;align-items:center;padding:6px 8px;background:#f1f3f5;border-bottom:1px solid #c9ced3}
+  #tbTop #bHelp{margin-left:auto}
+  #tb{gap:6px 8px;padding:6px 8px}
+  #tb .grp{flex-wrap:wrap;gap:4px 3px}
+  #tb2{flex:none;padding:4px 8px;background:#f1f3f5;border-bottom:1px solid #c9ced3}
+  #tb2 .grp{display:flex;flex-wrap:wrap;gap:4px 2px;align-items:center}
+  #tb2 label{font-size:11px;color:#444}
+  #tb2 #q{flex:1;min-width:120px}
+  #tbTop button,#tb button,#tb2 button{padding:7px 10px;font-size:14px;white-space:nowrap}
+  #tb2 button[data-z]{padding:7px 0;width:28px}
+  #tb label,#tb2 label{white-space:nowrap}
+  #tb select,#tb input[type=number],#tb2 input[type=text]{font-size:16px!important}
+  /* 境界線: 見た目の太さはそのままで、指で掴める範囲だけ前後10pxに広げる */
+  #nmSplit,#split{position:relative;z-index:5;touch-action:none}
+  #nmSplit::before{content:"";position:absolute;top:0;bottom:0;left:-10px;right:-10px}
+  #split::before{content:"";position:absolute;left:0;right:0;top:-10px;bottom:-10px}
+  #trScroll{touch-action:pan-y}
+  #trSlider{height:28px}
+  #help{left:8px;right:8px;top:56px;width:auto;max-height:calc(100% - 64px);font-size:13px}
+  #empty{padding:0 12px;text-align:center}
+}
+@media (pointer:coarse) and (max-width:600px){
+  #bOvwSvg{display:none}
+}
 </style>
 </head>
 <body>
@@ -140,8 +172,6 @@ input[type=number]{width:52px}
   赤背景=コンセンサスと不一致、灰背景=配列側がN・あいまい塩基（概観図と同じ判定）、黄背景=Q&lt;20、灰色文字=トリム部（アセンブルとコンセンサスに不使用）、下線=手動編集した塩基。
   <h3>保存</h3>
   プロジェクト(.json)は元の.ab1データを内包するので、1ファイルで再開できます。AB1書き出しは PBAS/PLOC/PCON（相補鎖にした配列は波形も）を書き換えた別名ファイルを作ります。
-  <h3>データの扱いと免責</h3>
-  読み込んだ配列はこのブラウザの中だけで処理され、外部には送信されません。本ツールは無保証です。アセンブルやコンセンサスの結果は、必ず波形と照らして確認してください。
 </div>
 
 <script id="core">
@@ -682,6 +712,22 @@ if (typeof module !== 'undefined') module.exports = SA;
 (function () {
 'use strict';
 const $ = id => document.getElementById(id);
+/* 指で操作する端末（スマホ・タブレット）。上部メニューを「常に出す1段」＋「必要なときだけ開く2つの段」に組み替える（表示領域を広く取るため） */
+const COARSE = !!(window.matchMedia && matchMedia('(pointer:coarse)').matches);
+if (COARSE) {
+  const tb = $('tb'), top = document.createElement('div'), t2 = document.createElement('div'); top.id = 'tbTop'; t2.id = 'tb2';
+  t2.appendChild(tb.querySelector('.grp:last-child'));   // 表示倍率・検索のグループ
+  const mk = label => { const b = document.createElement('button'); b.dataset.l = label; return b; };
+  const bView = mk('表示'), bMenu = mk('メニュー');
+  tb.before(top); tb.before(t2);   // 先に文書へ入れる（入れる前だと $('bHelp') が見つからない）
+  top.append($('bOpen'), $('bAsm'), bView, bMenu, $('bHelp'));
+  const toggle = (btn, el, key) => {   // 開閉の状態は次回も同じにする
+    let open = false; try { open = localStorage.getItem(key) === '1'; } catch (e) { }
+    const set = o => { open = o; el.style.display = o ? '' : 'none'; btn.classList.toggle('on', o); btn.textContent = btn.dataset.l + (o ? ' ▴' : ' ▾'); try { localStorage.setItem(key, o ? '1' : '0'); } catch (e) { } };
+    btn.onclick = () => set(!open); set(open);
+  };
+  toggle(bView, t2, 'sangerMobView'); toggle(bMenu, tb, 'sangerMobMenu');
+}
 const RH = 20, RULER = 18;
 const COL = { A: '#1a9a1a', C: '#1f4fd8', G: '#222', T: '#d62020', N: '#888' };
 let S = SA.newState();
@@ -717,13 +763,21 @@ function doRedo() { if (!redo.length) return; undo.push(snap()); restore(redo.po
 /* ---------- 配列名領域の幅（ドラッグで変更、次回も同じ幅で開く） ---------- */
 {
   const sp = $('nmSplit'), root = document.documentElement;
-  const setW = (w, save) => { w = Math.max(80, Math.min(Math.max(80, window.innerWidth - 150), Math.round(w))); root.style.setProperty('--nw', w + 'px'); if (save) try { localStorage.setItem('sangerNameW', w); } catch (e) { } if (typeof req === 'function') req(); };
-  try { const w = +localStorage.getItem('sangerNameW'); if (w) root.style.setProperty('--nw', w + 'px'); } catch (e) { }
+  /* スマホ・タブレットは幅を別に覚える（初期値は画面幅の30%、最大230px）。PCの幅と混ざらないようにするため */
+  const NW_KEY = COARSE ? 'sangerNameWm' : 'sangerNameW', NW_DEF = COARSE ? Math.max(80, Math.min(230, Math.round(window.innerWidth * 0.3))) : 230;
+  const setW = (w, save) => { w = Math.max(80, Math.min(Math.max(80, window.innerWidth - 150), Math.round(w))); root.style.setProperty('--nw', w + 'px'); if (save) try { localStorage.setItem(NW_KEY, w); } catch (e) { } if (typeof req === 'function') req(); };
+  let stored = 0; try { stored = +localStorage.getItem(NW_KEY); } catch (e) { }
+  if (stored || COARSE) root.style.setProperty('--nw', (stored || NW_DEF) + 'px');
   let dragging = false;
+  const end = () => { if (!dragging) return; dragging = false; sp.classList.remove('drag'); setW(names.getBoundingClientRect().width, true); };
   sp.addEventListener('mousedown', ev => { if (ev.button !== 0) return; dragging = true; sp.classList.add('drag'); ev.preventDefault(); });
   window.addEventListener('mousemove', ev => { if (dragging) setW(ev.clientX - names.getBoundingClientRect().left, false); });
-  window.addEventListener('mouseup', () => { if (!dragging) return; dragging = false; sp.classList.remove('drag'); setW(names.getBoundingClientRect().width, true); });
-  sp.addEventListener('dblclick', () => setW(230, true));
+  window.addEventListener('mouseup', end);
+  sp.addEventListener('dblclick', () => setW(NW_DEF, true));
+  /* タッチ: 指でドラッグ */
+  sp.addEventListener('touchstart', ev => { dragging = true; sp.classList.add('drag'); ev.preventDefault(); }, { passive: false });
+  window.addEventListener('touchmove', ev => { if (dragging && ev.touches.length) setW(ev.touches[0].clientX - names.getBoundingClientRect().left, false); }, { passive: true });
+  window.addEventListener('touchend', end); window.addEventListener('touchcancel', end);
 }
 
 /* ---------- 行構成 ---------- */
@@ -1058,11 +1112,20 @@ trScroll.addEventListener('wheel', ev => {
   if (ev.ctrlKey) { ev.preventDefault(); zoom(ev.deltaY < 0 ? 'zx+' : 'zx-'); }
   else if (ev.altKey) { ev.preventDefault(); zoom(ev.deltaY < 0 ? 'amp+' : 'amp-'); }
   else if (ev.shiftKey || Math.abs(ev.deltaX) > Math.abs(ev.deltaY)) {
-    ev.preventDefault(); const d = (ev.shiftKey ? ev.deltaY || ev.deltaX : ev.deltaX) / (zx * 12);
-    const gs = new Set(panels.map(p => groupOf(S.reads[p.id]))); for (const g of gs) tc[g] = Math.max(0, Math.min(groupWidth(g), getCenter(g) + d));
-    updateSlider(); req();
+    ev.preventDefault(); panTrace((ev.shiftKey ? ev.deltaY || ev.deltaX : ev.deltaX) / (zx * 12));
   }
 }, { passive: false });
+function panTrace(d) {
+  const gs = new Set(panels.map(p => groupOf(S.reads[p.id]))); for (const g of gs) tc[g] = Math.max(0, Math.min(groupWidth(g), getCenter(g) + d));
+  updateSlider(); req();
+}
+/* タッチ: 波形を指で左右になぞって横移動（縦はブラウザのスクロールに任せる） */
+{
+  let tx = null;
+  trScroll.addEventListener('touchstart', ev => { tx = ev.touches.length === 1 ? ev.touches[0].clientX : null; }, { passive: true });
+  trScroll.addEventListener('touchmove', ev => { if (tx === null || ev.touches.length !== 1) return; const x = ev.touches[0].clientX; panTrace((tx - x) / (zx * 12)); tx = x; }, { passive: true });
+  trScroll.addEventListener('touchend', () => { tx = null; }, { passive: true });
+}
 slider.addEventListener('input', () => { if (activeG) { tc[activeG] = +slider.value; req(); } });
 function zoom(z) {
   const f = z.endsWith('+') ? 1.25 : 0.8;
@@ -1411,7 +1474,7 @@ window.addEventListener('drop', ev => { if (!isFileDrag(ev)) return; ev.preventD
 /* ---------- 保存 ---------- */
 function download(blob, name) { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 2000); }
 async function saveAs(blob, name, desc, ext, handle) {
-  if (window.showSaveFilePicker) {
+  if (window.showSaveFilePicker && !COARSE) {   // スマホ・タブレットは保存ダイアログを使わず、ダウンロードとして保存する
     try {
       let h = handle;
       if (!h) {
@@ -1481,6 +1544,10 @@ window.addEventListener('beforeunload', ev => { if (dirty) { ev.preventDefault()
   $('split').addEventListener('mousedown', ev => { drag = true; ev.preventDefault(); });
   window.addEventListener('mousemove', ev => { if (!drag) return; const m = $('main').getBoundingClientRect(); $('seqPane').style.height = Math.max(60, Math.min(m.height - 120, ev.clientY - m.top)) + 'px'; req(); });
   window.addEventListener('mouseup', () => { drag = false; });
+  /* タッチ: 指でドラッグ */
+  $('split').addEventListener('touchstart', ev => { drag = true; ev.preventDefault(); }, { passive: false });
+  window.addEventListener('touchmove', ev => { if (!drag || !ev.touches.length) return; const m = $('main').getBoundingClientRect(), t = $('seqPane').getBoundingClientRect().top; $('seqPane').style.height = Math.max(60, Math.min(m.bottom - t - 120, ev.touches[0].clientY - t)) + 'px'; req(); }, { passive: true });
+  window.addEventListener('touchend', () => { drag = false; }); window.addEventListener('touchcancel', () => { drag = false; });
 })();
 new ResizeObserver(req).observe(seqView); new ResizeObserver(req).observe(trPane);
 rebuild();
