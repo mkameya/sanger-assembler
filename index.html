@@ -1540,13 +1540,17 @@ window.addEventListener('beforeunload', ev => { if (dirty) { ev.preventDefault()
 
 /* ---------- レイアウト ---------- */
 (function () {
-  let drag = false;
-  $('split').addEventListener('mousedown', ev => { drag = true; ev.preventDefault(); });
-  window.addEventListener('mousemove', ev => { if (!drag) return; const m = $('main').getBoundingClientRect(); $('seqPane').style.height = Math.max(60, Math.min(m.height - 120, ev.clientY - m.top)) + 'px'; req(); });
+  /* 配列表示の高さは #seqPane の上端から測る（#main の上端から測ると、上の概観図の高さ分だけ境界線が下に飛ぶ）。
+     grab = 押した位置と境界線の上端との差。押した瞬間に線が跳ねないよう、ドラッグ中はこの差を保つ */
+  let drag = false, grab = 0;
+  const start = y => { drag = true; grab = y - $('split').getBoundingClientRect().top; };
+  const move = y => { const m = $('main').getBoundingClientRect(), t = $('seqPane').getBoundingClientRect().top; $('seqPane').style.height = Math.max(60, Math.min(m.bottom - t - 120, y - grab - t)) + 'px'; req(); };
+  $('split').addEventListener('mousedown', ev => { start(ev.clientY); ev.preventDefault(); });
+  window.addEventListener('mousemove', ev => { if (drag) move(ev.clientY); });
   window.addEventListener('mouseup', () => { drag = false; });
   /* タッチ: 指でドラッグ */
-  $('split').addEventListener('touchstart', ev => { drag = true; ev.preventDefault(); }, { passive: false });
-  window.addEventListener('touchmove', ev => { if (!drag || !ev.touches.length) return; const m = $('main').getBoundingClientRect(), t = $('seqPane').getBoundingClientRect().top; $('seqPane').style.height = Math.max(60, Math.min(m.bottom - t - 120, ev.touches[0].clientY - t)) + 'px'; req(); }, { passive: true });
+  $('split').addEventListener('touchstart', ev => { start(ev.touches[0].clientY); ev.preventDefault(); }, { passive: false });
+  window.addEventListener('touchmove', ev => { if (drag && ev.touches.length) move(ev.touches[0].clientY); }, { passive: true });
   window.addEventListener('touchend', () => { drag = false; }); window.addEventListener('touchcancel', () => { drag = false; });
 })();
 new ResizeObserver(req).observe(seqView); new ResizeObserver(req).observe(trPane);

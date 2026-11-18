@@ -6,6 +6,8 @@ No installation, no server: your data never leaves your browser. The user interf
 Sangerシーケンスの波形ファイル（.ab1）を、ブラウザだけでアセンブル・表示・編集するツールです。
 `index.html` 1ファイルで動きます。インストールもサーバーも不要です。
 
+![画面: 上から概観図（赤=不一致、灰=N）、配列表示（2つのコンティグ）、波形表示](screenshot.png)
+
 ## 使う
 
 - オンライン: https://mkameya.github.io/sanger-assembler/
