@@ -154,7 +154,7 @@ input[type=number]{width:52px}
   塩基クリックで塩基選択（ドラッグ／<kbd>Shift</kbd>+クリックで範囲）。<kbd>←</kbd><kbd>→</kbd>で移動、<kbd>Shift</kbd>で範囲拡張、<kbd>↑</kbd><kbd>↓</kbd>で隣の行、<kbd>Home</kbd>/<kbd>End</kbd>。<kbd>Esc</kbd>で選択解除。
   <b>ブロック選択</b>：コンティグ内で塩基をクリックし、別の行までドラッグ（または別の行を<kbd>Shift</kbd>+クリック）すると、複数行×同じカラム範囲を選択。<kbd>Delete</kbd>で一括削除、塩基キーで一括置換、<kbd>Ctrl+C</kbd>でFASTAコピー。
   <h3>編集</h3>
-  塩基選択中に <kbd>A</kbd><kbd>C</kbd><kbd>G</kbd><kbd>T</kbd><kbd>N</kbd>（IUPAC文字も可）で置換／挿入（<kbd>Insert</kbd>で置換⇔挿入を切替）。配列内部のギャップ（-）もクリックで選択でき、塩基キーでそのカラムに塩基が入る（置換・挿入どちらのモードでも同じ）。挿入は選択塩基の前に入る。<kbd>Shift</kbd>+塩基キーなら後ろに入る（末尾への追加用）。<kbd>Delete</kbd>/<kbd>BackSpace</kbd>/<kbd>-</kbd> で選択範囲を削除（コンティグ内ではアラインメントを保ったままギャップになる）。<br>
+  塩基選択中に <kbd>A</kbd><kbd>C</kbd><kbd>G</kbd><kbd>T</kbd><kbd>N</kbd>（IUPAC文字も可）で置換／挿入（<kbd>Insert</kbd>で置換⇔挿入を切替）。1塩基の強調表示（カーソル）に打つと、置換・挿入どちらでも打った塩基がカーソルの左に来る（置換ではカーソルが右へ進む。続けて打てばその順に入る）。範囲を選択して打つと範囲全体がその塩基になり、選択は残る。配列内部のギャップ（-）もクリックで選択でき、塩基キーでそのカラムに塩基が入る（置換・挿入どちらのモードでも同じ。カーソルは右隣の塩基へ）。挿入は選択塩基の前に入る。<kbd>Shift</kbd>+塩基キーなら後ろに入る（末尾への追加用）。範囲（2塩基以上・ブロック）を選択中は <kbd>Delete</kbd>/<kbd>BackSpace</kbd> で範囲を削除。1塩基の強調表示はカーソルで、<kbd>Delete</kbd>＝カーソル位置の塩基を削除、<kbd>BackSpace</kbd>＝カーソルの左の塩基を削除（コンティグ内で左がギャップなら、飛ばして左の最寄りの塩基）。コンティグ内で削除した箇所はアラインメントを保ったままギャップになる。<kbd>-</kbd> はギャップの入力：置換モードでは塩基がギャップになる（削除と同じ。未結合の配列では塩基が消える）、挿入モードでは何もしない（全配列がギャップのカラムは残らないため。ギャップは位置調整モードで入れる）。<br>
   <b>位置調整</b>（アラインメントの手動調整）：「位置調整」モードでは塩基は変わらず、選択した配列だけが動く。<kbd>-</kbd>/<kbd>Space</kbd>＝選択塩基の前にギャップを入れる（その配列の以降が右へ1カラム）、<kbd>Delete</kbd>/<kbd>BackSpace</kbd>＝選択塩基の直前のギャップを詰める（以降が左へ1カラム）。ギャップを別の位置へ移すには、元の位置で詰めてから移したい位置で入れる。配列の先頭塩基で行うと配列全体が左右に動く。このモードでは選択は位置（1カラム）だけで、ギャップが入る位置を紫の縦線で示す。別の行まで縦にドラッグ（または<kbd>Shift</kbd>+クリック）すると間の配列をまとめて、<kbd>Ctrl</kbd>+クリックで離れた配列を1本ずつ追加／解除して、複数配列を同時に動かせる（詰めるギャップがない配列はそのまま）。<br>
   挿入モードでは、塩基が入る位置を緑の縦線で示す（<kbd>Shift</kbd>を押している間は後ろ側）。<br>
   コンセンサス行の塩基は置換のみ可能。配列の編集は該当カラムのコンセンサスに自動反映、全体の再計算は「Consensus更新」。<br>
@@ -748,14 +748,23 @@ function groupWidth(g) { const cg = SA.getContig(S, g); return cg ? cg.width : S
 /* ---------- Undo ---------- */
 function snap() {
   const reads = {}; for (const id in S.reads) reads[id] = { ...S.reads[id] };
-  return { reads, contigs: S.contigs.map(c => ({ ...c, members: c.members.slice() })), free: S.free.slice(), nextContig: S.nextContig };
+  const st = { reads, contigs: S.contigs.map(c => ({ ...c, members: c.members.slice() })), free: S.free.slice(), nextContig: S.nextContig };
+  st.sel = sel && { ...sel, aln: sel.aln && new Map(sel.aln) };   // 選択も一緒に残す（塩基の添字は編集でずれるため、配列だけ戻すと別の塩基を指す）
+  return st;
 }
 function pushUndo() { undo.push(snap()); if (undo.length > 200) undo.shift(); redo = []; dirty = true; }
 function restore(st) {
-  S = st; if (sel) delete sel.id2;
+  const saved = st.sel; delete st.sel; S = st;
+  if (saved) {   // その状態のときの選択に戻す（モードはその後切り替わっていることがあるので、今のモードに合わせる）
+    sel = saved;
+    if (mode === 'aln' && sel.kind === 'read') { sel.a = sel.b = Math.min(sel.a, sel.b); delete sel.id2; delete sel.hit; } else if (mode !== 'aln') delete sel.aln;
+  }
+  else if (sel) delete sel.id2;   // 選択なしで行った操作（Assemble など）は、今の選択を残す
   if (sel && sel.aln) { const g = S.reads[sel.id] && S.reads[sel.id].contig; for (const [id, i] of sel.aln) if (!g || !S.reads[id] || S.reads[id].contig !== g || i >= S.reads[id].seq.length) sel.aln.delete(id); }
   if (sel) { const ok = sel.kind === 'read' ? S.reads[sel.id] && Math.max(sel.a, sel.b) < S.reads[sel.id].seq.length : SA.getContig(S, sel.id) && Math.max(sel.a, sel.b) < SA.getContig(S, sel.id).width; if (!ok) sel = null; }
+  if (sel && sel.gap !== undefined) { const r = S.reads[sel.id], i = r.cols ? SA.lowerBound(r.cols, sel.gap) : -1; if (i !== sel.a || i <= 0 || r.cols[i] === sel.gap) delete sel.gap; }   // ギャップが残っているときだけ
   rebuild();
+  if (sel) { activeG = selGroup(); tc[activeG] = selCol(); showSeq(false); updateSlider(); }
 }
 function doUndo() { if (!undo.length) return; redo.push(snap()); restore(undo.pop()); status('元に戻しました'); }
 function doRedo() { if (!redo.length) return; undo.push(snap()); restore(redo.pop()); status('やり直しました'); }
@@ -1236,13 +1245,43 @@ function typeBase(ch, after) {   // after: 挿入モードで選択塩基の後�
     const ops = blockOps(blk); if (!ops.length) return;
     pushUndo(); for (const [id, [i0, i1]] of ops) SA.editReplace(S, id, i0, i1, ch); rebuild(); return status(`${ops.length} 行の選択範囲を ${ch} に置換しました`);
   }
-  if (sel.kind === 'cons') { if (mode !== 'rep') return status('コンセンサス行は置換のみ可能です'); pushUndo(); SA.editCons(S, sel.id, a, b, ch); return afterEdit(); }
+  // 1塩基（カーソル）への入力はカーソルを右へ進め、打った塩基がカーソルの左に来るようにする（挿入モードと同じ。続けて打てばその順に入り、BackSpace で打った塩基を消せる）。
+  // 範囲選択の置換（N でまとめて置換など）は打つ操作でないので、選択を残す。末尾ではそれ以上進めない
+  if (sel.kind === 'cons') { if (mode !== 'rep') return status('コンセンサス行は置換のみ可能です'); pushUndo(); SA.editCons(S, sel.id, a, b, ch); if (a === b) sel.a = sel.b = Math.min(b + 1, SA.getContig(S, sel.id).width - 1); return afterEdit(); }
   pushUndo();
-  if (sel.gap !== undefined) { SA.editInsert(S, sel.id, a, ch, 'L', sel.gap); delete sel.gap; return afterEdit(); }   // ギャップを塩基にする（置換・挿入どちらのモードでも同じ。入れた塩基が選択される）
-  if (mode === 'rep') SA.editReplace(S, sel.id, a, b, ch);
+  if (sel.gap !== undefined) { SA.editInsert(S, sel.id, a, ch, 'L', sel.gap); delete sel.gap; sel.a = sel.b = a + 1; return afterEdit(); }   // ギャップを塩基にする（置換・挿入どちらのモードでも同じ）。カーソルは右隣の塩基へ
+  if (mode === 'rep') { SA.editReplace(S, sel.id, a, b, ch); if (a === b) sel.a = sel.b = Math.min(b + 1, S.reads[sel.id].seq.length - 1); }
   else if (!after) { SA.editInsert(S, sel.id, a, ch, 'L'); sel.a++; sel.b++; }
   else { SA.editInsert(S, sel.id, b + 1, ch, 'R'); sel.a = sel.b = b + 1; }
   afterEdit();
+}
+/* - はギャップの入力として扱う。置換＝塩基をギャップにする（コンティグ内ではギャップが残り、未結合では塩基が消える）＝削除と同じ結果。
+   挿入＝新しいカラムにギャップを入れる＝全配列がギャップのカラムになり詰められるので、結果は何もしない */
+function typeGap() {
+  if (!sel) return;
+  if (mode === 'ins') return status('挿入モードの - は何もしません（ギャップは「位置調整」モードで入れます）');
+  if (sel.gap !== undefined) return status('すでにギャップです');
+  delSel();
+}
+/* BackSpace: 範囲（2塩基以上・ブロック）は Delete と同じく範囲を削除。1塩基の強調表示はカーソルとみなし、その左の塩基を消す（カーソルは同じ塩基のまま）。
+   コンティグ内で左がギャップなら、ギャップを飛ばして左の最寄りの塩基を消す（ギャップを消すと配列がずれる＝位置調整モードの操作になるため） */
+function backSel() {
+  if (!sel) return;
+  const [a, b] = selRange();
+  if (blockInfo() || (sel.gap === undefined && a !== b)) return delSel();
+  if (sel.kind === 'cons') return status('コンセンサス行は削除できません（置換のみ）');
+  if (a === 0) return status('左に塩基がありません（配列の先頭）');
+  const r = S.reads[sel.id], i = a - 1, ch = r.seq[i];
+  const cur = r.cols ? (sel.gap !== undefined ? sel.gap : r.cols[a]) : null, far = r.cols && cur - r.cols[i] > 1;
+  const gapOff = sel.gap !== undefined ? r.cols[a] - sel.gap : null;   // ギャップ上のカーソルは、右隣の塩基からの距離で位置を保つ
+  pushUndo(); SA.editDelete(S, sel.id, i, i);
+  const nr = S.reads[sel.id]; sel.a = sel.b = i;
+  if (gapOff !== null) sel.gap = nr.cols[i] - gapOff;
+  afterEdit();
+  if (far) {   // 離れた塩基を消したときは、消した位置が見えるようにして知らせる
+    const x = (i > 0 ? nr.cols[i - 1] + 1 : 0) * CW; if (x < seqScroll.scrollLeft) seqScroll.scrollLeft = Math.max(0, x - 2 * CW);
+    status(`${SA.dispName(nr)}: 間のギャップを飛ばして、左の塩基 ${ch}（塩基${i + 1}）を削除しました`);
+  }
 }
 function delSel() {
   if (!sel) return; if (sel.kind === 'cons') return status('コンセンサス行は削除できません（置換のみ）');
@@ -1294,7 +1333,9 @@ document.addEventListener('keydown', ev => {
   else if (mode === 'aln' && (k === '-' || k === ' ')) { ev.preventDefault(); alnShift(1); }
   else if (mode === 'aln' && (k === 'Delete' || k === 'Backspace')) { ev.preventDefault(); alnShift(-1); }
   else if (mode === 'aln' && k.length === 1 && SA.IUPAC.includes(k.toUpperCase())) { ev.preventDefault(); status('位置調整モードでは塩基を変更できません（置換・挿入モードに切り替えてください）'); }
-  else if (k === 'Delete' || k === 'Backspace' || k === '-') { ev.preventDefault(); delSel(); }
+  else if (k === '-') { ev.preventDefault(); typeGap(); }
+  else if (k === 'Backspace') { ev.preventDefault(); backSel(); }
+  else if (k === 'Delete') { ev.preventDefault(); delSel(); }
   else if (k === 'Insert') { ev.preventDefault(); setMode(mode === 'rep' ? 'ins' : 'rep'); }
   else if (k === 'Escape') { sel = null; selRows.clear(); $('help').style.display = 'none'; refreshSelClasses(); status(''); req(); }
   else if (k.length === 1 && SA.IUPAC.includes(k.toUpperCase())) { ev.preventDefault(); typeBase(k.toUpperCase(), ev.shiftKey); }
