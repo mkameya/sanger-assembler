@@ -161,7 +161,7 @@ input[type=number]{width:52px}
   <kbd>Ctrl+C</kbd> コピー（コンセンサス名や配列名をクリックして行選択→1行なら配列のみ、複数行はFASTA。行未選択なら選択中の塩基範囲）。<br>
   <kbd>Ctrl+Z</kbd> 元に戻す／<kbd>Ctrl+Y</kbd> やり直し／<kbd>Ctrl+S</kbd> プロジェクト保存。
   <h3>波形</h3>
-  ホイール=縦スクロール、<kbd>Shift</kbd>+ホイール=横スクロール、<kbd>Ctrl</kbd>+ホイール=横ズーム、<kbd>Alt</kbd>+ホイール=縦(振幅)ズーム。下のスライダーで選択中グループ（コンティグは全リード連動）を横移動。
+  ホイール=縦スクロール、<kbd>Shift</kbd>+ホイール=横スクロール、<kbd>Ctrl</kbd>+ホイール=横ズーム、<kbd>Alt</kbd>+ホイール=縦(振幅)ズーム。下のスライダーで選択中グループ（コンティグは全リード連動）を横移動。タッチ画面では波形を指で左右になぞっても同じ（選択中グループだけが動く）。
   <h3>検索・配列の追加</h3>
   <kbd>Ctrl+F</kbd> で検索欄へ。塩基配列を入力して <kbd>Enter</kbd> で次、<kbd>Shift+Enter</kbd> で前の一致へ移動（全配列とコンセンサスが対象、相補鎖側の一致も検索、R・Y・N などのあいまい文字可）。<br>
   配列はいつでも追加で開けます（未結合に入る）。.ab1 / FASTA / プロジェクトを zip にまとめたものも、そのまま開けます（中のフォルダも含めて展開。パスワード付き zip は不可）。既存コンティグへ加えるには、追加した配列とコンティグ行を選択してアセンブル。
@@ -1124,15 +1124,17 @@ trScroll.addEventListener('wheel', ev => {
     ev.preventDefault(); panTrace((ev.shiftKey ? ev.deltaY || ev.deltaX : ev.deltaX) / (zx * 12));
   }
 }, { passive: false });
-function panTrace(d) {
-  const gs = new Set(panels.map(p => groupOf(S.reads[p.id]))); for (const g of gs) tc[g] = Math.max(0, Math.min(groupWidth(g), getCenter(g) + d));
+function panTrace(d, selOnly) {   // selOnly: 選択中グループだけ（スライダーと同じ）。波形に出ていなければ全グループ
+  let gs = new Set(panels.map(p => groupOf(S.reads[p.id])));
+  if (selOnly && activeG && gs.has(activeG)) gs = [activeG];
+  for (const g of gs) tc[g] = Math.max(0, Math.min(groupWidth(g), getCenter(g) + d));
   updateSlider(); req();
 }
-/* タッチ: 波形を指で左右になぞって横移動（縦はブラウザのスクロールに任せる） */
+/* タッチ: 波形を指で左右になぞって、選択中グループを横移動（下のスライダーと同じ動き。縦はブラウザのスクロールに任せる） */
 {
   let tx = null;
   trScroll.addEventListener('touchstart', ev => { tx = ev.touches.length === 1 ? ev.touches[0].clientX : null; }, { passive: true });
-  trScroll.addEventListener('touchmove', ev => { if (tx === null || ev.touches.length !== 1) return; const x = ev.touches[0].clientX; panTrace((tx - x) / (zx * 12)); tx = x; }, { passive: true });
+  trScroll.addEventListener('touchmove', ev => { if (tx === null || ev.touches.length !== 1) return; const x = ev.touches[0].clientX; panTrace((tx - x) / (zx * 12), true); tx = x; }, { passive: true });
   trScroll.addEventListener('touchend', () => { tx = null; }, { passive: true });
 }
 slider.addEventListener('input', () => { if (activeG) { tc[activeG] = +slider.value; req(); } });
@@ -1598,7 +1600,7 @@ new ResizeObserver(req).observe(seqView); new ResizeObserver(req).observe(trPane
 rebuild();
 
 /* テスト用: http(s)で開いた場合のみ ?load=a.ab1,b.ab1 で同じフォルダのファイルを読み込む */
-window.SAui = { get S() { return S; }, loadItems, get sel() { return sel; }, get rows() { return rows; }, draw() { drawOvw(); drawSeq(); drawTrace(); } };
+window.SAui = { get S() { return S; }, loadItems, get sel() { return sel; }, get rows() { return rows; }, get tc() { return tc; }, draw() { drawOvw(); drawSeq(); drawTrace(); } };
 if (location.protocol.startsWith('http')) {
   const q = new URLSearchParams(location.search).get('load');
   if (q) Promise.all(q.split(',').map(async u => ({ name: u.split('/').pop(), bytes: new Uint8Array(await (await fetch(u)).arrayBuffer()) }))).then(expandZips).then(loadItems);
