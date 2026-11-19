@@ -47,8 +47,11 @@ input[type=number]{width:52px}
 #help h3{margin:6px 0 2px;font-size:13px}
 #help kbd{background:#eee;border:1px solid #bbb;border-radius:3px;padding:0 4px;font-family:Consolas,monospace}
 #ovwWrap{display:none;flex:none;border-bottom:1px solid #c9ced3;background:#fafafa}
-#ovwSide{width:calc(var(--nw,230px) + 5px);flex:none;display:flex;align-items:center;gap:4px;padding:2px 6px;font-size:11px;line-height:1.4;color:#555;border-right:1px solid #c9ced3;overflow:hidden}
-#ovwName{flex:1;min-width:0;overflow:hidden}
+/* 文字とボタンは横並び。入りきらなければボタンだけ下の行へ回る（文字は押しつぶさない）。上揃えで、1行目（コンセンサス）を概観図のコンセンサス帯に合わせる */
+#ovwSide{width:calc(var(--nw,230px) + 5px);flex:none;display:flex;flex-wrap:wrap;align-items:center;align-content:flex-start;gap:2px 4px;padding:2px 6px;font-size:11px;line-height:1.4;color:#555;border-right:1px solid #c9ced3;overflow:hidden}
+#ovwName{flex:1 1 auto;min-width:0;overflow:hidden}
+#ovwName span{white-space:nowrap}
+#ovwName i{display:inline-block;width:8px;height:8px;margin:0 2px 0 1px;vertical-align:-1px;box-shadow:inset 0 0 0 1px rgba(0,0,0,.12)}
 #bOvwSvg{flex:none;font-size:11px;padding:0 5px}
 #ovwBox{flex:1;position:relative;min-width:0;cursor:pointer}
 #ovwBox canvas{position:absolute;left:0;top:0}
@@ -135,7 +138,7 @@ input[type=number]{width:52px}
   </div>
 </div>
 <div id="main">
-  <div id="ovwWrap" title="コンティグ全長の概観。赤=コンセンサスと不一致、灰=配列側がN・あいまい塩基（不一致に数えない）、橙=コンセンサスのあいまい塩基、薄青=配列表示の表示範囲。クリックでその位置へ移動"><div id="ovwSide"><div id="ovwName"></div><button id="bOvwSvg" title="この概観図をSVGファイルに保存（配列名・向き・目盛り・凡例付き）">SVG保存</button></div><div id="ovwBox"><canvas id="ovw"></canvas></div></div>
+  <div id="ovwWrap" title="コンティグ全長の概観。赤=コンセンサスと不一致、灰=配列のN等（不一致に数えない）、橙=コンセンサスのN等、薄青=配列表示の表示範囲。N等=A・C・G・T以外の塩基（N・R・Y など）。クリックでその位置へ移動"><div id="ovwSide"><div id="ovwName"></div><button id="bOvwSvg" title="この概観図をSVGファイルに保存（配列名・向き・目盛り・凡例付き）">SVG保存</button></div><div id="ovwBox"><canvas id="ovw"></canvas></div></div>
   <div id="seqPane">
     <div id="names"></div>
     <div id="nmSplit" title="ドラッグで配列名の幅を変更（ダブルクリックで元の幅）"></div>
@@ -161,15 +164,15 @@ input[type=number]{width:52px}
   <kbd>Ctrl+C</kbd> コピー（コンセンサス名や配列名をクリックして行選択→1行なら配列のみ、複数行はFASTA。行未選択なら選択中の塩基範囲）。<br>
   <kbd>Ctrl+Z</kbd> 元に戻す／<kbd>Ctrl+Y</kbd> やり直し／<kbd>Ctrl+S</kbd> プロジェクト保存。
   <h3>波形</h3>
-  ホイール=縦スクロール、<kbd>Shift</kbd>+ホイール=横スクロール、<kbd>Ctrl</kbd>+ホイール=横ズーム、<kbd>Alt</kbd>+ホイール=縦(振幅)ズーム。下のスライダーで選択中グループ（コンティグは全リード連動）を横移動。タッチ画面では波形を指で左右になぞっても同じ（選択中グループだけが動く）。
+  ホイール=縦スクロール、<kbd>Shift</kbd>+ホイール（横ホイール・タッチ画面で左右になぞる）=選択中グループ（コンティグは全リード連動）を横移動、下のスライダーも同じ。<kbd>Ctrl</kbd>+ホイール=横ズーム、<kbd>Alt</kbd>+ホイール=縦(振幅)ズーム。
   <h3>検索・配列の追加</h3>
   <kbd>Ctrl+F</kbd> で検索欄へ。塩基配列を入力して <kbd>Enter</kbd> で次、<kbd>Shift+Enter</kbd> で前の一致へ移動（全配列とコンセンサスが対象、相補鎖側の一致も検索、R・Y・N などのあいまい文字可）。<br>
   配列はいつでも追加で開けます（未結合に入る）。.ab1 / FASTA / プロジェクトを zip にまとめたものも、そのまま開けます（中のフォルダも含めて展開。パスワード付き zip は不可）。既存コンティグへ加えるには、追加した配列とコンティグ行を選択してアセンブル。
   <h3>概観（不一致マップ）</h3>
-  コンティグがあると最上段に全長の概観を表示（最後に操作したコンティグ）。各配列の帯の上の赤い線がコンセンサスとの不一致、薄い灰色の線が配列側の N・あいまい塩基（判定できないので不一致に数えない）、コンセンサス帯の橙がコンセンサスのあいまい塩基。コンセンサスがあいまい塩基のとき、それと両立する塩基（R に対する A・G など）は不一致にしない。クリックすると配列表示・波形表示がその位置へ移動（赤線の近くをクリックするとその塩基を選択）。「SVG保存」で、配列名・目盛り・凡例付きの図として保存。
+  コンティグがあると最上段に全長の概観を表示（最後に操作したコンティグ）。N等＝A・C・G・T 以外の塩基（N や R・Y などのあいまい塩基）。各配列の帯の上の赤い線がコンセンサスとの不一致、薄い灰色の線が配列のN等（判定できないので不一致に数えない）、コンセンサス帯の橙がコンセンサスのN等（僅差で一つに決まらなかった位置）。コンセンサスがあいまい塩基のとき、それと両立する塩基（R に対する A・G など）は不一致にしない。左の1行目はコンティグ名・全長（ギャップを除いたコンセンサスの長さ）・コンセンサスのN等の数、2行目は構成配列の本数・不一致の数・配列のN等の数（配列ごとの合計）。色の四角は概観図の線の色。クリックすると配列表示・波形表示がその位置へ移動（赤線の近くをクリックするとその塩基を選択）。「SVG保存」で、配列名・目盛り・凡例付きの図として保存。
   <h3>表示</h3>
   配列名の前の <span style="color:#1c6fd1">▶</span>=読み込み時の向き、<span style="color:#d9480f">◀</span>=相補鎖にした配列。FASTA由来の配列（波形なし）は波形エリアに表示しません。<br>
-  赤背景=コンセンサスと不一致、灰背景=配列側がN・あいまい塩基（概観図と同じ判定）、黄背景=Q&lt;20、灰色文字=トリム部（アセンブルとコンセンサスに不使用）、下線=手動編集した塩基。
+  赤背景=コンセンサスと不一致、灰背景=配列のN等（概観図と同じ判定）、黄背景=Q&lt;20、灰色文字=トリム部（アセンブルとコンセンサスに不使用）、下線=手動編集した塩基。
   <h3>保存</h3>
   プロジェクト(.json)は元の.ab1データを内包するので、1ファイルで再開できます。AB1書き出しは PBAS/PLOC/PCON（相補鎖にした配列は波形も）を書き換えた別名ファイルを作ります。
 </div>
@@ -826,7 +829,9 @@ function req() { if (!pending) { pending = true; requestAnimationFrame(() => { p
 /* ---------- コンティグ概観（不一致マップ） ---------- */
 const ORH = 7; let ovId = null;
 function ovContig() { if (activeG && SA.getContig(S, activeG)) ovId = activeG; return SA.getContig(S, ovId) || S.contigs[0] || null; }
-const MIS = '#e01818', UNC = '#ccd0d6';   // 概観図の線: 不一致=赤、判定不能（配列側が N・あいまい塩基）=薄い灰色
+const MIS = '#e01818', UNC = '#ccd0d6', AMB = '#f08c00';   // 概観図の線: 不一致=赤、配列のN等（判定不能）=薄い灰色、コンセンサスのN等=橙。N等=A・C・G・T以外の塩基（N や R・Y など）
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+let ovwTxt = '';   // 概観図の左の文字（毎フレーム innerHTML を書き換えないため）
 function mismatches(r, cg) {   // [塩基添字, カラム, 種類(1=不一致, 2=判定不能)] の配列。ギャップ（コンセンサスに塩基があるのに配列側が欠失）は不一致
   const out = [], e = r.seq.length - r.clipR, cons = cg.cons;
   for (let i = r.clipL; i < e; i++) {
@@ -847,7 +852,7 @@ function drawOvw() {
   const v0 = seqScroll.scrollLeft / CW; ctx.fillStyle = '#dbe6fa'; ctx.fillRect(v0 * sx, 0, Math.max(2, seqView.clientWidth / CW * sx), H);
   const cons = cg.cons; let f = 0, l = cg.width - 1; while (f < l && cons[f] === '-') f++; while (l > f && cons[l] === '-') l--;
   ctx.fillStyle = '#b9ad84'; ctx.fillRect(f * sx, 3, (l - f + 1) * sx, ORH - 2);
-  ctx.fillStyle = '#f08c00'; let amb = 0; for (let c = f; c <= l; c++) if (!'ACGT-'.includes(cons[c])) { ctx.fillRect(c * sx, 2, tw, ORH); amb++; }
+  ctx.fillStyle = AMB; let amb = 0; for (let c = f; c <= l; c++) if (!'ACGT-'.includes(cons[c])) { ctx.fillRect(c * sx, 2, tw, ORH); amb++; }
   let nm = 0, nu = 0;
   cg.members.forEach((id, k) => {
     const r = S.reads[id], n = r.seq.length, y = 3 + (k + 1) * ORH;
@@ -857,7 +862,10 @@ function drawOvw() {
     for (const m of byKind(mismatches(r, cg))) { ctx.fillStyle = m[2] === 1 ? MIS : UNC; ctx.fillRect(m[1] * sx, y - 1, tw, ORH); if (m[2] === 1) nm++; else nu++; }
   });
   if (sel && selGroup() === cg.id) { ctx.fillStyle = '#000'; ctx.fillRect(selCol() * sx + sx / 2 - .5, 0, 1, H); }
-  const t = `${cg.name} 概観\n不一致 ${nm}・N等 ${nu}・あいまい ${amb}`; if ($('ovwName').innerText !== t) $('ovwName').innerText = t;
+  // 1行目=コンティグ（コンセンサス）、2行目=構成配列。色の四角は概観図の線の色（凡例を兼ねる）
+  const sw = (c, s) => `<span><i style="background:${c}"></i>${s}</span>`;   // 「■N等 0」の途中では改行しない
+  const t = `${esc(cg.name)}（${cons.replace(/-/g, '').length} bp, ${sw(AMB, `N等 ${amb}）`)}<br>${cg.members.length}本（${sw(MIS, `不一致 ${nm}`)} ${sw(UNC, `N等 ${nu}）`)}`;
+  if (ovwTxt !== t) $('ovwName').innerHTML = ovwTxt = t;
 }
 $('ovwBox').addEventListener('mousedown', ev => {
   const cg = ovContig(); if (!cg || ev.button !== 0) return; ev.preventDefault();
@@ -870,7 +878,6 @@ $('ovwBox').addEventListener('mousedown', ev => {
 });
 /* 概観図のSVG（画面のキャンバスとは別に、配列名・目盛り・凡例を付けて組み立てる） */
 function ovwSvg(cg) {
-  const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   const mc = document.createElement('canvas').getContext('2d'); mc.font = '11px sans-serif';
   const rs = cg.members.map(id => S.reads[id]), consName = cg.name + ' コンセンサス';
   const LW = Math.ceil(Math.max(mc.measureText(consName).width, ...rs.map(r => mc.measureText(r.name).width + 16))) + 16;
@@ -883,7 +890,7 @@ function ovwSvg(cg) {
   const label = (y, html) => body.push(`<text x="${LW - 6}" y="${y + BH - 1}" text-anchor="end">${html}</text>`);
   label(top, `<tspan font-weight="bold">${esc(consName)}</tspan>`);
   body.push(`<rect x="${X(f)}" y="${top}" width="${f2((l - f + 1) * sx)}" height="${BH}" fill="#b9ad84"/>`);
-  for (let c = f; c <= l; c++) if (!'ACGT-'.includes(cons[c])) { body.push(`<rect x="${X(c)}" y="${top - 1}" width="${f2(mw)}" height="${BH + 2}" fill="#f08c00"/>`); amb++; }
+  for (let c = f; c <= l; c++) if (!'ACGT-'.includes(cons[c])) { body.push(`<rect x="${X(c)}" y="${top - 1}" width="${f2(mw)}" height="${BH + 2}" fill="${AMB}"/>`); amb++; }
   rs.forEach((r, k) => {
     const n = r.seq.length, y = top + (k + 1) * RS, a = r.cols[r.clipL], b = r.cols[n - r.clipR - 1];
     label(y, `<tspan fill="${r.rc ? '#d9480f' : '#1c6fd1'}">${r.rc ? '◀' : '▶'}</tspan> ${esc(r.name)}`);
@@ -892,14 +899,14 @@ function ovwSvg(cg) {
     for (const m of byKind(mismatches(r, cg))) { body.push(`<rect x="${X(m[1])}" y="${y - 1}" width="${f2(mw)}" height="${BH + 2}" fill="${m[2] === 1 ? MIS : UNC}"/>`); if (m[2] === 1) nm++; else nu++; }
   });
   const ly = top + (rs.length + 1) * RS + 8, H = ly + 18, W = LW + PW + 12;
-  const leg = [[MIS, 3, 'コンセンサスと不一致'], [UNC, 3, '配列側がN・あいまい塩基'], ['#f08c00', 3, 'コンセンサスのあいまい塩基'], ['#9fb0c6', 14, '有効範囲'], ['#dfe2e6', 14, 'トリム部'], ['#1c6fd1', 0, '▶ 読み込み時の向き'], ['#d9480f', 0, '◀ 相補鎖']];
+  const leg = [[MIS, 3, 'コンセンサスと不一致'], [UNC, 3, '配列のN等'], [AMB, 3, 'コンセンサスのN等'], ['#9fb0c6', 14, '有効範囲'], ['#dfe2e6', 14, 'トリム部'], ['#1c6fd1', 0, '▶ 読み込み時の向き'], ['#d9480f', 0, '◀ 相補鎖']];
   let lx = LW;
   for (const [col, w, t] of leg) {
     if (w) { body.push(`<rect x="${lx}" y="${ly}" width="${w}" height="${BH}" fill="${col}"/><text x="${lx + w + 4}" y="${ly + BH - 1}" fill="#555">${t}</text>`); lx += w + 4; }
     else body.push(`<text x="${lx}" y="${ly + BH - 1}" fill="#555"><tspan fill="${col}">${t[0]}</tspan>${t.slice(1)}</text>`);
     lx += Math.ceil(mc.measureText(t).width) + 18;
   }
-  const title = `${cg.name}（${rs.length}本, ${cons.replace(/-/g, '').length} bp, アラインメント幅 ${cg.width}）  不一致 ${nm}・配列側N等 ${nu}・コンセンサスのあいまい ${amb}`;
+  const title = `${cg.name}（${cons.replace(/-/g, '').length} bp, アラインメント幅 ${cg.width}, N等 ${amb}）  ${rs.length}本（不一致 ${nm}・N等 ${nu}）   N等=A・C・G・T以外の塩基（N・R・Y など）`;
   return `<?xml version="1.0" encoding="UTF-8"?>\n<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" font-family="sans-serif" font-size="11" fill="#222">\n<rect width="${W}" height="${H}" fill="#fff"/>\n<text x="${LW}" y="14" font-size="12" font-weight="bold">${esc(title)}</text>\n${body.join('\n')}\n</svg>\n`;
 }
 $('bOvwSvg').onclick = async () => {
@@ -1124,9 +1131,9 @@ trScroll.addEventListener('wheel', ev => {
     ev.preventDefault(); panTrace((ev.shiftKey ? ev.deltaY || ev.deltaX : ev.deltaX) / (zx * 12));
   }
 }, { passive: false });
-function panTrace(d, selOnly) {   // selOnly: 選択中グループだけ（スライダーと同じ）。波形に出ていなければ全グループ
+function panTrace(d) {   // 選択中グループだけ横移動（スライダーと同じ）。選択中グループが波形に出ていなければ全グループ
   let gs = new Set(panels.map(p => groupOf(S.reads[p.id])));
-  if (selOnly && activeG && gs.has(activeG)) gs = [activeG];
+  if (activeG && gs.has(activeG)) gs = [activeG];
   for (const g of gs) tc[g] = Math.max(0, Math.min(groupWidth(g), getCenter(g) + d));
   updateSlider(); req();
 }
@@ -1134,7 +1141,7 @@ function panTrace(d, selOnly) {   // selOnly: 選択中グループだけ（ス�
 {
   let tx = null;
   trScroll.addEventListener('touchstart', ev => { tx = ev.touches.length === 1 ? ev.touches[0].clientX : null; }, { passive: true });
-  trScroll.addEventListener('touchmove', ev => { if (tx === null || ev.touches.length !== 1) return; const x = ev.touches[0].clientX; panTrace((tx - x) / (zx * 12), true); tx = x; }, { passive: true });
+  trScroll.addEventListener('touchmove', ev => { if (tx === null || ev.touches.length !== 1) return; const x = ev.touches[0].clientX; panTrace((tx - x) / (zx * 12)); tx = x; }, { passive: true });
   trScroll.addEventListener('touchend', () => { tx = null; }, { passive: true });
 }
 slider.addEventListener('input', () => { if (activeG) { tc[activeG] = +slider.value; req(); } });
