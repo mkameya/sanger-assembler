@@ -92,7 +92,7 @@ input[type=number]{width:52px}
 <body>
 <div id="tb">
   <div class="grp">
-    <button id="bOpen" title="ab1 / FASTA / プロジェクト(.json)、またはそれらをまとめた zip を開く">開く</button>
+    <button id="bOpen" title="ab1 / FASTA / プロジェクト(.json)、またはそれらをまとめた zip を開く (Ctrl+O)">開く</button>
     <button id="bSave" title="作業状況を保存 (Ctrl+S)">Project保存</button>
     <button id="bClose" title="選択した配列を一覧から削除（元のファイルは消えません。Ctrl+Zで戻せます）">配列を閉じる</button>
     <input type="file" id="fIn" multiple style="display:none" accept=".ab1,.abi,.fasta,.fa,.fna,.fas,.ffn,.seq,.txt,.json,.zip">
@@ -110,9 +110,9 @@ input[type=number]{width:52px}
     <button id="bUndo" title="Ctrl+Z">元に戻す</button>
     <button id="bRedo" title="Ctrl+Y">やり直し</button>
     <label>入力</label>
-    <button id="mRep" class="on" title="選択塩基を置換">置換</button>
+    <button id="mRep" class="on" title="選択塩基を置換。Insertキーで挿入と切り替え">置換</button>
     <button id="mIns" title="選択塩基の前に挿入（Shift+塩基キーなら選択塩基の後ろに挿入）。Insertキーで置換と切り替え">挿入</button>
-    <button id="mAln" title="アラインメントの手動調整。塩基は変えず、選択した配列だけを左右にずらす（ブロック選択なら複数配列を同時に）。- または Space＝選択塩基の前にギャップを入れる（以降が右へ）／Delete・BackSpace＝選択塩基の直前のギャップを詰める（以降が左へ）">位置調整</button>
+    <button id="mAln" title="塩基は変えずに、選択した配列を左右にずらす（- / Space で右へ、BackSpace / Delete で左へ）">位置調整</button>
   </div>
   <div class="grp">
     <button id="bRC" title="選択した配列（コンティグ内なら当該コンティグ全体）を相補鎖にする（相補鎖を5'→3'方向で表示。波形も左右反転）">相補鎖</button>
@@ -153,8 +153,8 @@ input[type=number]{width:52px}
 <div id="drop">ここにドロップして開く</div>
 <div id="help">
   <h3>選択</h3>
-  配列名クリックで行選択（<kbd>Ctrl</kbd>/<kbd>Shift</kbd>で複数）。塩基を選択中に同じコンティグの配列名をクリックすると、カーソルはその配列の同じ位置へ移る。配列名をドラッグで順番入れ替え（同じコンティグ内／未結合内、コンティグ行はコンティグ同士）。<br>
-  塩基クリックで塩基選択（ドラッグ／<kbd>Shift</kbd>+クリックで範囲）。<kbd>←</kbd><kbd>→</kbd>で移動、<kbd>Shift</kbd>で範囲拡張、<kbd>↑</kbd><kbd>↓</kbd>で隣の行、<kbd>Home</kbd>/<kbd>End</kbd>。<kbd>Esc</kbd>で選択解除。
+  配列名クリックで行選択（<kbd>Ctrl</kbd>/<kbd>Shift</kbd>で複数）。塩基を選択中に同じコンティグの配列名をクリックすると、カーソルはその配列の同じ位置へ移る。配列名をドラッグで順番入れ替え（同じコンティグ内／未結合内、コンティグ行はコンティグ同士）。配列名・コンセンサス名のダブルクリック、または <kbd>F2</kbd> で名前を変更（<kbd>F2</kbd>は選択中の行、行選択がなければカーソルのある配列）。<br>
+  塩基クリックで塩基選択（ドラッグ／<kbd>Shift</kbd>+クリックで範囲）。<kbd>←</kbd><kbd>→</kbd>で移動、<kbd>Shift</kbd>で範囲拡張、<kbd>↑</kbd><kbd>↓</kbd>で隣の行、<kbd>Home</kbd>/<kbd>End</kbd>。<kbd>Ctrl</kbd>+<kbd>←</kbd><kbd>→</kbd>で同じ行の前・次の要確認箇所へ（配列行ではコンセンサスとの不一致・N等・欠けたギャップ、コンセンサス行ではN等とギャップ）。<kbd>Esc</kbd>で選択解除。
   <b>ブロック選択</b>：コンティグ内で塩基をクリックし、別の行までドラッグ（または別の行を<kbd>Shift</kbd>+クリック）すると、複数行×同じカラム範囲を選択。<kbd>Delete</kbd>で一括削除、塩基キーで一括置換、<kbd>Ctrl+C</kbd>でFASTAコピー。
   <h3>編集</h3>
   塩基選択中に <kbd>A</kbd><kbd>C</kbd><kbd>G</kbd><kbd>T</kbd><kbd>N</kbd>（IUPAC文字も可）で置換／挿入（<kbd>Insert</kbd>で置換⇔挿入を切替）。1塩基の強調表示（カーソル）に打つと、置換・挿入どちらでも打った塩基がカーソルの左に来る（置換ではカーソルが右へ進む。続けて打てばその順に入る）。範囲を選択して打つと範囲全体がその塩基になり、選択は残る。配列内部のギャップ（-）もクリックで選択でき、塩基キーでそのカラムに塩基が入る（置換・挿入どちらのモードでも同じ。カーソルは右隣の塩基へ）。挿入は選択塩基の前に入る。<kbd>Shift</kbd>+塩基キーなら後ろに入る（末尾への追加用）。範囲（2塩基以上・ブロック）を選択中は <kbd>Delete</kbd>/<kbd>BackSpace</kbd> で範囲を削除。1塩基の強調表示はカーソルで、<kbd>Delete</kbd>＝カーソル位置の塩基を削除、<kbd>BackSpace</kbd>＝カーソルの左の塩基を削除（コンティグ内で左がギャップなら、飛ばして左の最寄りの塩基）。コンティグ内で削除した箇所はアラインメントを保ったままギャップになる。<kbd>-</kbd> はギャップの入力：置換モードでは塩基がギャップになる（削除と同じ。未結合の配列では塩基が消える）、挿入モードでは何もしない（全配列がギャップのカラムは残らないため。ギャップは位置調整モードで入れる）。<br>
@@ -162,7 +162,7 @@ input[type=number]{width:52px}
   挿入モードでは、塩基が入る位置を緑の縦線で示す（<kbd>Shift</kbd>を押している間は後ろ側）。<br>
   コンセンサス行の塩基は置換のみ可能。配列の編集は該当カラムのコンセンサスに自動反映、全体の再計算は「Consensus更新」。<br>
   <kbd>Ctrl+C</kbd> コピー（コンセンサス名や配列名をクリックして行選択→1行なら配列のみ、複数行はFASTA。行未選択なら選択中の塩基範囲）。<br>
-  <kbd>Ctrl+Z</kbd> 元に戻す／<kbd>Ctrl+Y</kbd> やり直し／<kbd>Ctrl+S</kbd> プロジェクト保存。
+  <kbd>Ctrl+Z</kbd> 元に戻す／<kbd>Ctrl+Y</kbd> やり直し／<kbd>Ctrl+S</kbd> プロジェクト保存／<kbd>Ctrl+O</kbd> ファイルを開く。
   <h3>波形</h3>
   ホイール=縦スクロール、<kbd>Shift</kbd>+ホイール（横ホイール・タッチ画面で左右になぞる）=選択中グループ（コンティグは全リード連動）を横移動、下のスライダーも同じ。<kbd>Ctrl</kbd>+ホイール=横ズーム、<kbd>Alt</kbd>+ホイール=縦(振幅)ズーム。
   <h3>検索・配列の追加</h3>
@@ -1181,11 +1181,20 @@ names.addEventListener('click', ev => {
   if (row.t === 'read') { activeG = groupOf(S.reads[row.id]); showPanel(row.id); } else activeG = row.id;
   updateSlider(); refreshSelClasses(); req(); status(selRows.size + ' 行を選択');
 });
+function renameRow(t, id) {   // t='cons'（コンティグ名）か 'read'
+  const obj = t === 'cons' ? SA.getContig(S, id) : S.reads[id], nv = prompt('名前', obj.name);
+  if (nv && nv.trim() && nv !== obj.name) { pushUndo(); (t === 'cons' ? SA.getContig(S, id) : S.reads[id]).name = nv.trim(); rebuild(); }
+}
 names.addEventListener('dblclick', ev => {
   const d = ev.target.closest('.nm'), row = d && rows[d.dataset.ri]; if (!row || !row.id) return;
-  const obj = row.t === 'cons' ? SA.getContig(S, row.id) : S.reads[row.id], nv = prompt('名前', obj.name);
-  if (nv && nv.trim() && nv !== obj.name) { pushUndo(); (row.t === 'cons' ? SA.getContig(S, row.id) : S.reads[row.id]).name = nv.trim(); rebuild(); }
+  renameRow(row.t, row.id);
 });
+function renameSelected() {   // F2: 行選択1行ならその行、行選択なしならカーソルのある行
+  if (selRows.size > 1) return status('名前を変える行を1行だけ選択してください');
+  if (selRows.size === 1) { const row = rows.find(r => r.id && selRows.has(r.id)); if (row) return renameRow(row.t, row.id); }
+  if (sel) return renameRow(sel.kind === 'cons' ? 'cons' : 'read', sel.id);
+  status('名前を変える行（配列名・コンセンサス名）を選択してください');
+}
 let dragKeys = null;
 names.addEventListener('dragstart', ev => {
   const d = ev.target.closest('.nm'), row = d && rows[d.dataset.ri]; if (!row || !row.id) { ev.preventDefault(); return; }
@@ -1320,6 +1329,25 @@ function delSel() {
   const [a, b] = selRange(), r = S.reads[sel.id]; if (b - a + 1 >= r.seq.length) return status('配列全体は削除できません（「配列を閉じる」を使用）');
   pushUndo(); SA.editDelete(S, sel.id, a, b); const n = S.reads[sel.id].seq.length; sel.a = sel.b = Math.min(a, n - 1); afterEdit();
 }
+/* Ctrl+←→: 同じ行の前・次の要確認箇所へ。配列＝概観図の印（不一致・N等・コンセンサスに塩基があるのに欠けたギャップ）＋配列自身の N等、
+   コンセンサス＝A・C・G・T 以外（N等とギャップ）、未結合の配列＝トリム部を除く N等。配列中のギャップすべてには止まらない（他の配列もギャップの正常な箇所が多いため） */
+function jumpMark(d) {
+  if (!sel) return status('塩基を選択してから Ctrl+←→ で前・次の要確認箇所へ移動します');
+  const cur = selCol(), marks = [];   // [塩基添字（コンセンサスはカラム）, カラム, ギャップか]（カラム昇順）
+  if (sel.kind === 'cons') { const cons = SA.getContig(S, sel.id).cons; for (let c = 0; c < cons.length; c++) if (!'ACGT'.includes(cons[c])) marks.push([c, c, false]); }
+  else {
+    const r = S.reads[sel.id], cg = r.contig && SA.getContig(S, r.contig);
+    const own = new Map(); for (let i = r.clipL; i < r.seq.length - r.clipR; i++) if (!'ACGT'.includes(r.seq[i])) own.set(SA.colOf(r, i), i);   // 配列自身の N等（コンセンサスも同じ N だと不一致に数えられないため別に拾う）
+    if (cg) for (const m of mismatches(r, cg)) { const gap = r.cols[m[0]] !== m[1]; if (gap || !own.has(m[1])) marks.push([m[0], m[1], gap]); }
+    for (const [c, i] of own) marks.push([i, c, false]);
+    marks.sort((x, y) => x[1] - y[1]);
+  }
+  const m = d > 0 ? marks.find(x => x[1] > cur) : marks.slice().reverse().find(x => x[1] < cur);
+  if (!m) return status(d > 0 ? 'これより右に要確認箇所（不一致・N等・欠けたギャップ）はありません' : 'これより左に要確認箇所（不一致・N等・欠けたギャップ）はありません');
+  setSel(sel.kind, sel.id, m[0], m[0], 'key');
+  if (m[2] && mode !== 'aln') { sel.gap = m[1]; tc[activeG] = m[1]; }   // 欠けたギャップはギャップを選ぶ（位置調整モードはギャップを選べないので右隣の塩基）
+  status(`要確認 ${marks.indexOf(m) + 1} / ${marks.length} ─ ` + selInfo()); req();
+}
 function moveSel(d, ext) {
   if (!sel) return; const max = (sel.kind === 'cons' ? SA.getContig(S, sel.id).width : S.reads[sel.id].seq.length) - 1;
   const from = sel.gap !== undefined && d === 1 ? sel.b - 1 : sel.b;   // ギャップからは左右の隣の塩基へ
@@ -1348,6 +1376,7 @@ document.addEventListener('keydown', ev => {
     else if (l === 's') { ev.preventDefault(); saveProject(); } else if (l === 'o') { ev.preventDefault(); openDialog(); }
     else if (l === 'c') { ev.preventDefault(); doCopy(); }
     else if (l === 'f') { ev.preventDefault(); $('q').focus(); $('q').select(); }
+    else if (k === 'ArrowLeft' || k === 'ArrowRight') { ev.preventDefault(); jumpMark(k === 'ArrowRight' ? 1 : -1); }
     return;
   }
   if (ev.altKey) return;
@@ -1361,6 +1390,7 @@ document.addEventListener('keydown', ev => {
   else if (k === 'Backspace') { ev.preventDefault(); backSel(); }
   else if (k === 'Delete') { ev.preventDefault(); delSel(); }
   else if (k === 'Insert') { ev.preventDefault(); setMode(mode === 'rep' ? 'ins' : 'rep'); }
+  else if (k === 'F2') { ev.preventDefault(); renameSelected(); }
   else if (k === 'Escape') { sel = null; selRows.clear(); $('help').style.display = 'none'; refreshSelClasses(); status(''); req(); }
   else if (k.length === 1 && SA.IUPAC.includes(k.toUpperCase())) { ev.preventDefault(); typeBase(k.toUpperCase(), ev.shiftKey); }
 });
