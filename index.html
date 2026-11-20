@@ -153,7 +153,7 @@ input[type=number]{width:52px}
 <div id="drop">ここにドロップして開く</div>
 <div id="help">
   <h3>選択</h3>
-  配列名クリックで行選択（<kbd>Ctrl</kbd>/<kbd>Shift</kbd>で複数）。配列名をドラッグで順番入れ替え（同じコンティグ内／未結合内、コンティグ行はコンティグ同士）。<br>
+  配列名クリックで行選択（<kbd>Ctrl</kbd>/<kbd>Shift</kbd>で複数）。塩基を選択中に同じコンティグの配列名をクリックすると、カーソルはその配列の同じ位置へ移る。配列名をドラッグで順番入れ替え（同じコンティグ内／未結合内、コンティグ行はコンティグ同士）。<br>
   塩基クリックで塩基選択（ドラッグ／<kbd>Shift</kbd>+クリックで範囲）。<kbd>←</kbd><kbd>→</kbd>で移動、<kbd>Shift</kbd>で範囲拡張、<kbd>↑</kbd><kbd>↓</kbd>で隣の行、<kbd>Home</kbd>/<kbd>End</kbd>。<kbd>Esc</kbd>で選択解除。
   <b>ブロック選択</b>：コンティグ内で塩基をクリックし、別の行までドラッグ（または別の行を<kbd>Shift</kbd>+クリック）すると、複数行×同じカラム範囲を選択。<kbd>Delete</kbd>で一括削除、塩基キーで一括置換、<kbd>Ctrl+C</kbd>でFASTAコピー。
   <h3>編集</h3>
@@ -759,7 +759,7 @@ function pushUndo() { undo.push(snap()); if (undo.length > 200) undo.shift(); re
 function restore(st) {
   const saved = st.sel; delete st.sel; S = st;
   if (saved) {   // その状態のときの選択に戻す（モードはその後切り替わっていることがあるので、今のモードに合わせる）
-    sel = saved;
+    sel = saved; selRows.clear();   // 行選択は Undo に残らないので、塩基選択を戻すときは外す（両方が残らないように）
     if (mode === 'aln' && sel.kind === 'read') { sel.a = sel.b = Math.min(sel.a, sel.b); delete sel.id2; delete sel.hit; } else if (mode !== 'aln') delete sel.aln;
   }
   else if (sel) delete sel.id2;   // 選択なしで行った操作（Assemble など）は、今の選択を残す
@@ -1049,6 +1049,7 @@ function selCol() { return sel.kind === 'cons' ? sel.b : sel.gap !== undefined ?
 function selGroup() { return sel.kind === 'cons' ? sel.id : groupOf(S.reads[sel.id]); }
 function setSel(kind, id, a, b, src) {
   if (mode === 'aln' && kind === 'read') a = b;   // 位置調整モードでは横方向の範囲を持たせない（位置だけ指定）
+  if (selRows.size) { selRows.clear(); refreshSelClasses(); }   // 行選択と塩基選択は最後に選んだ方だけ（両方残ると Copy・相補鎖などが見えていない行選択にかかる）
   sel = { kind, id, a, b }; activeG = selGroup();
   if (src !== 'trace') { tc[activeG] = selCol(); if (kind === 'read') showPanel(id); }
   if (src !== 'seq') showSeq(src === 'trace' || src === 'ovw');
@@ -1156,10 +1157,24 @@ function zoom(z) {
 for (const b of document.querySelectorAll('[data-z]')) b.onclick = () => zoom(b.dataset.z);
 
 /* ---------- 行選択・並べ替え ---------- */
+/* 塩基選択中に同じコンティグの行をクリックしたときの移動先。範囲外なら null（カーソルは外れる）。配列内部のギャップならギャップを選ぶ */
+function carryTo(row) {
+  if (!sel) return null; const g = selGroup(), col = selCol();
+  if (row.t === 'cons') return row.id === g ? { kind: 'cons', i: col } : null;
+  const r = S.reads[row.id]; if (!r.cols || r.contig !== g || col < r.cols[0] || col > r.cols[r.cols.length - 1]) return null;
+  const i = SA.lowerBound(r.cols, col); if (r.cols[i] === col) return { kind: 'read', i };
+  return mode === 'aln' ? null : { kind: 'read', i, gap: col };   // 位置調整モードではギャップを選べない
+}
 names.addEventListener('click', ev => {
   const d = ev.target.closest('.nm'), row = d && rows[d.dataset.ri];
   if (!row || !row.id) { if (!ev.ctrlKey && !ev.shiftKey) { selRows.clear(); refreshSelClasses(); req(); } return; }
   const ri = +d.dataset.ri;
+  const to = !ev.ctrlKey && !ev.shiftKey && carryTo(row);
+  if (to) {   // 同じコンティグ内の行: カーソルをその行の同じカラムへ移し、行選択もその行にする（両方が同じ行を指す）
+    setSel(to.kind, row.id, to.i, to.i, 'key'); if (to.gap !== undefined) { sel.gap = to.gap; tc[activeG] = to.gap; }
+    selRows.add(row.id); rowAnchor = ri; refreshSelClasses(); status(selInfo()); req(); return;
+  }
+  sel = null;   // それ以外は行選択にしたら塩基選択は外す（setSel と対）
   if (ev.shiftKey && rowAnchor !== null) { if (!ev.ctrlKey) selRows.clear(); const lo = Math.min(ri, rowAnchor), hi = Math.max(ri, rowAnchor); for (let i = lo; i <= hi; i++) if (rows[i] && rows[i].id) selRows.add(rows[i].id); }
   else if (ev.ctrlKey) { if (selRows.has(row.id)) selRows.delete(row.id); else selRows.add(row.id); rowAnchor = ri; }
   else { selRows.clear(); selRows.add(row.id); rowAnchor = ri; }
@@ -1607,7 +1622,7 @@ new ResizeObserver(req).observe(seqView); new ResizeObserver(req).observe(trPane
 rebuild();
 
 /* テスト用: http(s)で開いた場合のみ ?load=a.ab1,b.ab1 で同じフォルダのファイルを読み込む */
-window.SAui = { get S() { return S; }, loadItems, get sel() { return sel; }, get rows() { return rows; }, get tc() { return tc; }, draw() { drawOvw(); drawSeq(); drawTrace(); } };
+window.SAui = { get S() { return S; }, loadItems, get sel() { return sel; }, get selRows() { return selRows; }, get rows() { return rows; }, get tc() { return tc; }, draw() { drawOvw(); drawSeq(); drawTrace(); } };
 if (location.protocol.startsWith('http')) {
   const q = new URLSearchParams(location.search).get('load');
   if (q) Promise.all(q.split(',').map(async u => ({ name: u.split('/').pop(), bytes: new Uint8Array(await (await fetch(u)).arrayBuffer()) }))).then(expandZips).then(loadItems);
