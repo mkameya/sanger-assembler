@@ -98,7 +98,7 @@ input[type=number]{width:52px}
     <input type="file" id="fIn" multiple style="display:none" accept=".ab1,.abi,.fasta,.fa,.fna,.fas,.ffn,.seq,.txt,.json,.zip">
   </div>
   <div class="grp">
-    <button id="bAsm" title="行を未選択なら全配列、選択中なら選択配列のみ">Assemble</button>
+    <button id="bAsm" title="行を2つ以上選択中なら選択配列のみ。未選択なら全配列（1つだけ選択中なら確認して全配列）">Assemble</button>
     <label>基準</label>
     <select id="preset"><option value="strict">厳しい</option><option value="normal" selected>標準</option><option value="loose">緩い</option><option value="custom">Custom</option></select>
     <label>重なり≥</label><input type="number" id="minOv" min="10" max="500" value="30">
@@ -583,7 +583,6 @@ function assemble(S, selIds, opt) {
   let units;
   if (!selIds) { for (const cg of S.contigs.slice()) dissolve(S, cg); units = S.free.slice(); }
   else { units = []; for (const id of selIds) { const r = S.reads[id]; if (!r) continue; const u = r.contig || id; if (!units.includes(u)) units.push(u); } }
-  if (units.length < 2) return { merged: 0, msg: 'アセンブル対象が2つ以上必要です' };
   const rc0 = new Map();
   const cl = units.map(u => {
     const cg = getContig(S, u); let c;
@@ -1440,15 +1439,24 @@ $('preset').onchange = () => { const p = PRE[$('preset').value]; if (p) { $('min
 $('minOv').oninput = $('minId').oninput = () => { $('preset').value = 'custom'; };
 $('bAsm').onclick = () => {
   const ids = []; for (const row of rows) if (row.id && selRows.has(row.id)) { if (row.t === 'cons') ids.push(...SA.getContig(S, row.id).members); else ids.push(row.id); }
-  const all = ids.length === 0;
   if (Object.keys(S.reads).length < 2) return status('配列が2本以上必要です');
-  if (all && S.contigs.length && !confirm('行が選択されていないので、既存のコンティグをいったん解体して全配列をアセンブルし直します。よろしいですか？\n（一部だけ追加で結合したい場合は、対象の行を選択してから実行してください）')) return;
+  // 選択が1単位（配列1本・コンティグ1つ・同じコンティグ内の配列だけ）では選択分のアセンブルは成り立たないので、確認して全件にする（2026-11-22 ユーザー決定）
+  const one = ids.length > 0 && new Set(ids.map(id => S.reads[id].contig || id)).size < 2;
+  const all = ids.length === 0 || one;
+  if (one && !confirm('選択行が1つだけ（同じコンティグ内の配列は、まとめて1つと数えます）なので、全配列をアセンブルします。' + (S.contigs.length ? '既存のコンティグはいったん解体して組み直します。' : '') + 'よろしいですか？\n（選択配列だけをアセンブルしたいなら、2行以上選んでから実行してください）')) return;
+  if (!one && all && S.contigs.length && !confirm('行が選択されていないので、既存のコンティグをいったん解体して全配列をアセンブルし直します。よろしいですか？\n（一部だけ追加で結合したい場合は、対象の行を選択してから実行してください）')) return;
+  if (one) { selRows.clear(); refreshSelClasses(); }   // 残すと次に押したときも同じ確認が出る
   const opt = { minOverlap: Math.max(10, +$('minOv').value || 30), minIdent: Math.min(100, Math.max(50, +$('minId').value || 92)) / 100 };
   status('アセンブル中…');
   setTimeout(() => {
+    const redo0 = redo, dirty0 = dirty, rows0 = new Set(selRows), hadContigs = S.contigs.length > 0;
     pushUndo(); const t = performance.now(); let res;
     try { res = SA.assemble(S, all ? null : ids, opt); } catch (e) { console.error(e); restore(undo.pop()); return status('アセンブル中にエラー: ' + e.message); }
-    sel = null; tc = {}; rebuild(); status(`${res.msg}  [重なり≥${opt.minOverlap}, 一致率≥${Math.round(opt.minIdent * 100)}%, ${Math.round(performance.now() - t)} ms]`);
+    const ms = Math.round(performance.now() - t);
+    if (!res.merged && !(all && hadContigs)) {   // 何も変わらなかったら Undo の履歴に残さない（試行中に向きだけ変わった配列も戻す）
+      restore(undo.pop()); redo = redo0; dirty = dirty0; selRows.clear(); for (const id of rows0) selRows.add(id); refreshSelClasses();
+    } else { sel = null; tc = {}; rebuild(); }
+    status(`${res.msg}  [重なり≥${opt.minOverlap}, 一致率≥${Math.round(opt.minIdent * 100)}%, ${ms} ms]`);
   }, 20);
 };
 $('bCons').onclick = () => {
@@ -1535,7 +1543,7 @@ async function expandZips(items, depth = 0) {
 }
 function loadItems(items) {
   items.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
-  const added = [], errs = [];
+  const added = [], errs = []; let opened = '';
   for (const it of items) {
     if (it.err) { errs.push(it.name + ': ' + it.err); continue; }
     try {
@@ -1545,7 +1553,7 @@ function loadItems(items) {
         const text = new TextDecoder().decode(u8), t = text.trimStart();
         if (t[0] === '{') {
           if (Object.keys(S.reads).length && !confirm('現在の作業内容を閉じてプロジェクト「' + it.name + '」を開きます。よろしいですか？')) continue;
-          S = SA.deserialize(JSON.parse(text)); undo = []; redo = []; sel = null; selRows.clear(); tc = {}; dirty = false; projHandle = it.handle || null; added.length = 0;
+          S = SA.deserialize(JSON.parse(text)); undo = []; redo = []; sel = null; selRows.clear(); tc = {}; dirty = false; projHandle = it.handle || null; added.length = 0; opened = it.name;
         } else if (t[0] === '>') added.push(...SA.parseFasta(text, it.name));
         else errs.push(it.name + ': 未対応の形式');
       }
@@ -1553,7 +1561,8 @@ function loadItems(items) {
   }
   if (added.length) { pushUndo(); for (const r of added) { S.reads[r.id] = r; S.free.push(r.id); } }
   rebuild();
-  status((added.length ? added.length + ' 本の配列を追加しました。' : '') + (errs.length ? ' 読み込めなかったファイル: ' + errs.join(' / ') : '') || 'プロジェクトを開きました');
+  // 開いたものだけを書く（確認ダイアログで取り消したときに「開きました」と出さない）
+  status([opened ? 'プロジェクト「' + opened + '」を開きました。' : '', added.length ? added.length + ' 本の配列を追加しました。' : '', errs.length ? '読み込めなかったファイル: ' + errs.join(' / ') : ''].filter(Boolean).join(' '));
 }
 let dragDepth = 0;
 const isFileDrag = ev => ev.dataTransfer && [...ev.dataTransfer.types].includes('Files');
@@ -1651,7 +1660,7 @@ window.addEventListener('beforeunload', ev => { if (dirty) { ev.preventDefault()
 new ResizeObserver(req).observe(seqView); new ResizeObserver(req).observe(trPane);
 rebuild();
 
-/* テスト用: http(s)で開いた場合のみ ?load=a.ab1,b.ab1 で同じフォルダのファイルを読み込む */
+/* http(s)で開いた場合のみ ?load=a.ab1,b.ab1 で同じフォルダのファイルを読み込む（テスト用。公開版のデモリンク ?load=demo/demo.zip もこれを使う） */
 window.SAui = { get S() { return S; }, loadItems, get sel() { return sel; }, get selRows() { return selRows; }, get rows() { return rows; }, get tc() { return tc; }, draw() { drawOvw(); drawSeq(); drawTrace(); } };
 if (location.protocol.startsWith('http')) {
   const q = new URLSearchParams(location.search).get('load');
