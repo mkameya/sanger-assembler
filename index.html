@@ -200,7 +200,6 @@ function newId(p) { return p + (uid++); }
 function revcompStr(s) { let o = ''; for (let i = s.length - 1; i >= 0; i--) { const c = s[i]; o += COMP[c] || c; } return o; }
 function lowerBound(a, v) { let lo = 0, hi = a.length; while (lo < hi) { const m = (lo + hi) >> 1; if (a[m] < v) lo = m + 1; else hi = m; } return lo; }
 function colOf(r, i) { return r.cols ? r.cols[i] : i; }
-function idxAtCol(r, c) { if (!r.cols) return (c >= 0 && c < r.seq.length) ? c : -1; const i = lowerBound(r.cols, c); return (i < r.cols.length && r.cols[i] === c) ? i : -1; }
 function nearestIdx(r, c) {
   const n = r.seq.length; if (!r.cols) return Math.max(0, Math.min(n - 1, c));
   let i = lowerBound(r.cols, c); if (i >= n) return n - 1; if (i > 0 && c - r.cols[i - 1] < r.cols[i] - c) i--; return i;
@@ -412,11 +411,17 @@ function insertColumn(S, cg, c) {
 }
 
 /* ---------- 編集操作（配列は必ず新しく作り直す＝Undoスナップショットと共有しない） ---------- */
+/* 塩基 i0..i1 のカラムと、両隣の塩基との間のギャップのカラム。ギャップの重みは両隣の品質値で決まり（consensus）、トリム範囲の外のギャップは数えないので、
+   品質値・トリムが変わると間のギャップのコンセンサスも変わる */
+function spanCols(r, i0, i1) {
+  const n = r.cols.length, c0 = i0 > 0 ? r.cols[i0 - 1] + 1 : r.cols[i0], c1 = i1 < n - 1 ? r.cols[i1 + 1] - 1 : r.cols[i1], o = [];
+  for (let c = c0; c <= c1; c++) o.push(c); return o;
+}
 function editReplace(S, id, i0, i1, ch) {
   const r = S.reads[id]; const q = r.qual.slice(), ed = r.ed.slice();
   for (let i = i0; i <= i1; i++) { q[i] = CODE[ch] < 4 ? EDIT_Q : 0; ed[i] = 1; }
   r.seq = r.seq.slice(0, i0) + ch.repeat(i1 - i0 + 1) + r.seq.slice(i1 + 1); r.qual = q; r.ed = ed;
-  if (r.contig) { const cg = getContig(S, r.contig), cl = []; for (let i = i0; i <= i1; i++) cl.push(r.cols[i]); recomputeCons(S, cg, cl); }
+  if (r.contig) recomputeCons(S, getContig(S, r.contig), spanCols(r, i0, i1));
 }
 function cut(a, i0, i1) { const o = new a.constructor(a.length - (i1 - i0 + 1)); o.set(a.subarray(0, i0)); o.set(a.subarray(i1 + 1), i0); return o; }
 function editDelete(S, id, i0, i1) {
@@ -425,7 +430,11 @@ function editDelete(S, id, i0, i1) {
   const oldCols = r.cols ? Array.from(r.cols.subarray(i0, i1 + 1)) : null;
   r.seq = r.seq.slice(0, i0) + r.seq.slice(i1 + 1); r.qual = cut(r.qual, i0, i1); r.ed = cut(r.ed, i0, i1); r.pos = cut(r.pos, i0, i1);
   r.clipL -= dl; r.clipR -= dr;
-  if (r.cols) { r.cols = cut(r.cols, i0, i1); const cg = getContig(S, r.contig); recomputeCons(S, cg, oldCols); compact(S, cg); }
+  if (r.cols) {   // 消した塩基のカラムと、詰めた後に両隣の間のギャップになるカラム
+    r.cols = cut(r.cols, i0, i1); const cg = getContig(S, r.contig), m = r.cols.length, cl = [];
+    for (let c = i0 > 0 ? r.cols[i0 - 1] + 1 : oldCols[0], e = i0 < m ? r.cols[i0] - 1 : oldCols[oldCols.length - 1]; c <= e; c++) cl.push(c);
+    recomputeCons(S, cg, cl); compact(S, cg);
+  }
   return true;
 }
 function ins(a, at, v) { const o = new a.constructor(a.length + 1); o.set(a.subarray(0, at)); o[at] = v; o.set(a.subarray(at), at + 1); return o; }
@@ -444,7 +453,7 @@ function editInsert(S, id, at, ch, side, gapCol) {   // gapCol: 既存ギャッ�
   }
   if (at < r.clipL) r.clipL++; else if (at > n - r.clipR) r.clipR++;
   r.seq = r.seq.slice(0, at) + ch + r.seq.slice(at); r.qual = ins(r.qual, at, CODE[ch] < 4 ? EDIT_Q : 0); r.ed = ins(r.ed, at, 1); r.pos = ins(r.pos, at, p);
-  if (cg) { r.cols = ins(r.cols, at, col); recomputeCons(S, cg, [col]); }
+  if (cg) { r.cols = ins(r.cols, at, col); recomputeCons(S, cg, spanCols(r, at, at)); }
 }
 /* アラインメントの手動調整: 塩基 i 以降を、この配列だけ d(+1/-1) カラムずらす。塩基・品質・波形位置は変えない */
 function shiftCols(S, id, i, d, defer) {   // defer: 複数配列を続けて動かすとき、空カラム詰めを呼び出し側でまとめて行う
@@ -463,9 +472,9 @@ function shiftCols(S, id, i, d, defer) {   // defer: 複数配列を続けて動
 function editCons(S, cid, c0, c1, ch) { const cg = getContig(S, cid); const s = cg.cons.padEnd(cg.width, '-'); cg.cons = s.slice(0, c0) + ch.repeat(c1 - c0 + 1) + s.slice(c1 + 1); }
 function setClip(S, id, cl, cr) {
   const r = S.reads[id], n = r.seq.length; cl = Math.max(0, cl); cr = Math.max(0, cr); if (cl + cr >= n) return false;
-  const ch = []; if (r.cols) {
-    for (let i = Math.min(cl, r.clipL); i < Math.max(cl, r.clipL); i++) ch.push(r.cols[i]);
-    for (let i = n - Math.max(cr, r.clipR); i < n - Math.min(cr, r.clipR); i++) ch.push(r.cols[i]);
+  const ch = []; if (r.cols) {   // 有効範囲に出入りした塩基と、その間のギャップ
+    const a = Math.min(cl, r.clipL), b = Math.max(cl, r.clipL); if (b > a) ch.push(...spanCols(r, a, b - 1));
+    const c = n - Math.max(cr, r.clipR), d = n - Math.min(cr, r.clipR); if (d > c) ch.push(...spanCols(r, c, d - 1));
   }
   r.clipL = cl; r.clipR = cr;
   if (r.cols && ch.length) recomputeCons(S, getContig(S, r.contig), ch);
@@ -702,7 +711,7 @@ async function unzip(u8) {
   return out;
 }
 
-return { IUPAC, CODE, revcompStr, lowerBound, colOf, idxAtCol, nearestIdx, sampleAtCol, parseAbif, readFromAbif, parseFasta, traces, autoTrim, rcRead, exportAb1,
+return { IUPAC, CODE, revcompStr, lowerBound, colOf, nearestIdx, sampleAtCol, parseAbif, readFromAbif, parseFasta, traces, autoTrim, rcRead, exportAb1,
   consensus, getContig, recomputeCons, compact, editReplace, editDelete, editInsert, shiftCols, editCons, setClip, flipContig, dissolve, removeFromContig, removeReads,
   assemble, newState, serialize, deserialize, fastaOf, dispName, mottRange, isZip, unzip, baseCmp };
 })();
@@ -1476,7 +1485,12 @@ $('bRC').onclick = () => {
     const r = S.reads[id], g = groupOf(r); if (done.has(g)) continue; done.add(g);
     const w = groupWidth(g); if (tc[g] !== undefined) tc[g] = w - 1 - tc[g];
     if (r.contig) { SA.flipContig(S, SA.getContig(S, g)); nc++; } else { SA.rcRead(r); nr++; }
-    if (sel && selGroup() === g) { const m = (sel.kind === 'cons' ? w : S.reads[sel.id].seq.length) - 1; sel.a = m - sel.a; sel.b = m - sel.b; }
+    if (sel && selGroup() === g) {
+      const m = (sel.kind === 'cons' ? w : S.reads[sel.id].seq.length) - 1;
+      if (sel.gap !== undefined) { sel.gap = w - 1 - sel.gap; sel.a = sel.b = m + 1 - sel.a; }   // ギャップは「右隣の塩基」で持つので、反転後の右隣（元の左隣）を指す
+      else { sel.a = m - sel.a; sel.b = m - sel.b; }
+      if (sel.aln) for (const [id, i] of sel.aln) sel.aln.set(id, S.reads[id].seq.length - 1 - i);   // 位置調整の追加対象も同じ塩基を指し続ける
+    }
   }
   rebuild(); status(`相補鎖にしました（${nc ? 'コンティグ ' + nc + ' 個（構成配列すべて）' : ''}${nc && nr ? '、' : ''}${nr ? '配列 ' + nr + ' 本' : ''}）`);
 };
