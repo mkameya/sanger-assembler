@@ -55,6 +55,7 @@ input[type=number]{width:52px}
 #bOvwSvg{flex:none;font-size:11px;padding:0 5px}
 #ovwBox{flex:1;position:relative;min-width:0;cursor:pointer}
 #ovwBox canvas{position:absolute;left:0;top:0}
+#ovwScroll{overflow-x:hidden;overflow-y:auto}
 #empty{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#889;font-size:16px;pointer-events:none}
 /* スマホ・タブレット（指で操作する端末）だけに効く閲覧用の調整。マウス環境の表示は変えない */
 @media (pointer:coarse){
@@ -138,7 +139,7 @@ input[type=number]{width:52px}
   </div>
 </div>
 <div id="main">
-  <div id="ovwWrap" title="コンティグ全長の概観。赤=コンセンサスと不一致、灰=配列のN等（不一致に数えない）、橙=コンセンサスのN等、薄青=配列表示の表示範囲。N等=A・C・G・T以外の塩基（N・R・Y など）。クリックでその位置へ移動"><div id="ovwSide"><div id="ovwName"></div><button id="bOvwSvg" title="この概観図をSVGファイルに保存（配列名・向き・目盛り・凡例付き）">SVG保存</button></div><div id="ovwBox"><canvas id="ovw"></canvas></div></div>
+  <div id="ovwWrap" title="コンティグ全長の概観。赤=コンセンサスと不一致、灰=配列のN等（不一致に数えない）、橙=コンセンサスのN等、薄青=配列表示の表示範囲。N等=A・C・G・T以外の塩基（N・R・Y など）。クリックでその位置へ移動"><div id="ovwSide"><div id="ovwName"></div><button id="bOvwSvg" title="この概観図をSVGファイルに保存（配列名・向き・目盛り・凡例付き）">SVG保存</button></div><div id="ovwBox"><canvas id="ovw"></canvas><div class="ov" id="ovwScroll"><div id="ovwSp"></div></div></div></div>
   <div id="seqPane">
     <div id="names"></div>
     <div id="nmSplit" title="ドラッグで配列名の幅を変更（ダブルクリックで元の幅）"></div>
@@ -169,7 +170,7 @@ input[type=number]{width:52px}
   <kbd>Ctrl+F</kbd> で検索欄へ。塩基配列を入力して <kbd>Enter</kbd> で次、<kbd>Shift+Enter</kbd> で前の一致へ移動（全配列とコンセンサスが対象、相補鎖側の一致も検索、R・Y・N などのあいまい文字可）。<br>
   配列はいつでも追加で開けます（未結合に入る）。.ab1 / FASTA / プロジェクトを zip にまとめたものも、そのまま開けます（中のフォルダも含めて展開。パスワード付き zip は不可）。既存コンティグへ加えるには、追加した配列とコンティグ行を選択してアセンブル。
   <h3>概観（不一致マップ）</h3>
-  コンティグがあると最上段に全長の概観を表示（最後に操作したコンティグ）。N等＝A・C・G・T 以外の塩基（N や R・Y などのあいまい塩基）。各配列の帯の上の赤い線がコンセンサスとの不一致、薄い灰色の線が配列のN等（判定できないので不一致に数えない）、コンセンサス帯の橙がコンセンサスのN等（僅差で一つに決まらなかった位置）。コンセンサスがあいまい塩基のとき、それと両立する塩基（R に対する A・G など）は不一致にしない。左の1行目はコンティグ名・全長（ギャップを除いたコンセンサスの長さ）・コンセンサスのN等の数、2行目は構成配列の本数・不一致の数・配列のN等の数（配列ごとの合計）。色の四角は概観図の線の色。クリックすると配列表示・波形表示がその位置へ移動（赤線の近くをクリックするとその塩基を選択）。「SVG保存」で、配列名・目盛り・凡例付きの図として保存。
+  コンティグがあると最上段に全長の概観を表示（最後に操作したコンティグ）。N等＝A・C・G・T 以外の塩基（N や R・Y などのあいまい塩基）。各配列の帯の上の赤い線がコンセンサスとの不一致、薄い灰色の線が配列のN等（判定できないので不一致に数えない）、コンセンサス帯の橙がコンセンサスのN等（僅差で一つに決まらなかった位置）。コンセンサスがあいまい塩基のとき、それと両立する塩基（R に対する A・G など）は不一致にしない。左の1行目はコンティグ名・全長（ギャップを除いたコンセンサスの長さ）・コンセンサスのN等の数、2行目は構成配列の本数・不一致の数・配列のN等の数（配列ごとの合計）。色の四角は概観図の線の色。クリックすると配列表示・波形表示がその位置へ移動（赤線の近くをクリックするとその塩基を選択）。「SVG保存」で、配列名・目盛り・凡例付きの図として保存。配列が多いと行を細くし、それでも入りきらなければ縦にスクロールする（コンセンサスの行は固定。選んだ配列が隠れていれば、その行が見える位置まで動く）。
   <h3>表示</h3>
   配列名の前の <span style="color:#1c6fd1">▶</span>=読み込み時の向き、<span style="color:#d9480f">◀</span>=相補鎖にした配列。FASTA由来の配列（波形なし）は波形エリアに表示しません。<br>
   赤背景=コンセンサスと不一致、灰背景=配列のN等（概観図と同じ判定）、黄背景=Q&lt;20、灰色文字=トリム部（アセンブルとコンセンサスに不使用）、下線=手動編集した塩基。
@@ -835,7 +836,7 @@ function refreshSelClasses() { for (const d of names.querySelectorAll('.nm')) { 
 let pending = false;
 function req() { if (!pending) { pending = true; requestAnimationFrame(() => { pending = false; drawOvw(); drawSeq(); drawTrace(); }); } }
 /* ---------- コンティグ概観（不一致マップ） ---------- */
-const ORH = 7; let ovId = null;
+const ORH = 7; let ovId = null, ovRH = ORH, ovSel = null;   // ORH = 概観図の1行の高さ（標準）。ovRH = 今描いている高さ（本数が多いと細くする）。ovSel = 前回描いたときに選んでいた配列
 function ovContig() { if (activeG && SA.getContig(S, activeG)) ovId = activeG; return SA.getContig(S, ovId) || S.contigs[0] || null; }
 const MIS = '#e01818', UNC = '#ccd0d6', AMB = '#f08c00';   // 概観図の線: 不一致=赤、配列のN等（判定不能）=薄い灰色、コンセンサスのN等=橙。N等=A・C・G・T以外の塩基（N や R・Y など）
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -853,32 +854,45 @@ const byKind = ms => ms.sort((a, b) => b[2] - a[2]);   // 判定不能を先に�
 function drawOvw() {
   const cg = ovContig(), wrap = $('ovwWrap'), box = $('ovwBox');
   if (!cg) { if (wrap.style.display !== 'none') wrap.style.display = 'none'; return; }
-  const hh = (cg.members.length + 1) * ORH + 6 + 'px';
+  /* 高さの上限は作業領域（#main）の20%（120〜200px）。超える本数では1行を細くし（4pxまで）、それでも入らなければ縦にスクロール。
+     s = 標準の行（7px）に対する縮尺。帯・印の太さと間隔は同じ比率で細くする。
+     スクロールは配列表示と同じ方式（canvas は見えている範囲だけ、上に重ねた #ovwScroll の中身の高さで全体を表す）。コンセンサスの行は動かさない */
+  const n1 = cg.members.length + 1, cap = Math.round(Math.max(120, Math.min(200, $('main').clientHeight * 0.2)));
+  const rh = ovRH = Math.max(4, Math.min(ORH, (cap - 6) / n1)), s = rh / ORH, full = Math.round(n1 * rh + 6), hh = Math.min(full, cap) + 'px';
   if (wrap.style.display !== 'flex') wrap.style.display = 'flex';
   if (box.style.height !== hh) box.style.height = hh;
-  const [ctx, W, H] = fit($('ovw'), box), sx = W / cg.width, tw = Math.max(1.5, sx);
+  const ov = $('ovwScroll'), sp = $('ovwSp'); if (sp.style.height !== full + 'px') sp.style.height = full + 'px';
+  /* 選んだ配列が変わったら、その行が見える位置までスクロール（Ctrl+←→ で隠れた行へ移ったときなど） */
+  const sid = sel && sel.kind === 'read' ? sel.id : null;
+  if (sid !== ovSel) { ovSel = sid; const k = cg.members.indexOf(sid), y = 3 + (k + 1) * rh - ov.scrollTop;
+    if (k >= 0 && y < 3 + rh) ov.scrollTop = k * rh; else if (k >= 0 && y + rh > ov.clientHeight - 3) ov.scrollTop = (k + 2) * rh + 6 - ov.clientHeight; }
+  const st = ov.scrollTop, [ctx, W, H] = fit($('ovw'), ov), sx = W / cg.width, tw = Math.max(1.5, sx);
   const v0 = seqScroll.scrollLeft / CW; ctx.fillStyle = '#dbe6fa'; ctx.fillRect(v0 * sx, 0, Math.max(2, seqView.clientWidth / CW * sx), H);
   const cons = cg.cons; let f = 0, l = cg.width - 1; while (f < l && cons[f] === '-') f++; while (l > f && cons[l] === '-') l--;
-  ctx.fillStyle = '#b9ad84'; ctx.fillRect(f * sx, 3, (l - f + 1) * sx, ORH - 2);
-  ctx.fillStyle = AMB; let amb = 0; for (let c = f; c <= l; c++) if (!'ACGT-'.includes(cons[c])) { ctx.fillRect(c * sx, 2, tw, ORH); amb++; }
+  ctx.fillStyle = '#b9ad84'; ctx.fillRect(f * sx, 3, (l - f + 1) * sx, rh - 2 * s);
+  ctx.fillStyle = AMB; let amb = 0; for (let c = f; c <= l; c++) if (!'ACGT-'.includes(cons[c])) { ctx.fillRect(c * sx, 3 - s, tw, rh); amb++; }
   let nm = 0, nu = 0;
+  ctx.save(); ctx.beginPath(); ctx.rect(0, 3 + rh - s, W, H); ctx.clip();   // 配列の行はコンセンサスの行の下にだけ描く
   cg.members.forEach((id, k) => {
-    const r = S.reads[id], n = r.seq.length, y = 3 + (k + 1) * ORH;
-    ctx.fillStyle = '#dfe2e6'; ctx.fillRect(r.cols[0] * sx, y + 1, (r.cols[n - 1] - r.cols[0] + 1) * sx, ORH - 4);
+    const r = S.reads[id], n = r.seq.length, y = 3 + (k + 1) * rh - st;
+    ctx.fillStyle = '#dfe2e6'; ctx.fillRect(r.cols[0] * sx, y + s, (r.cols[n - 1] - r.cols[0] + 1) * sx, rh - 4 * s);
     const a = r.cols[r.clipL], b = r.cols[n - r.clipR - 1];
-    ctx.fillStyle = selRows.has(id) || (sel && sel.kind === 'read' && sel.id === id) ? '#5b84d6' : '#9fb0c6'; ctx.fillRect(a * sx, y, (b - a + 1) * sx, ORH - 2);
-    for (const m of byKind(mismatches(r, cg))) { ctx.fillStyle = m[2] === 1 ? MIS : UNC; ctx.fillRect(m[1] * sx, y - 1, tw, ORH); if (m[2] === 1) nm++; else nu++; }
+    ctx.fillStyle = selRows.has(id) || (sel && sel.kind === 'read' && sel.id === id) ? '#5b84d6' : '#9fb0c6'; ctx.fillRect(a * sx, y, (b - a + 1) * sx, rh - 2 * s);
+    for (const m of byKind(mismatches(r, cg))) { ctx.fillStyle = m[2] === 1 ? MIS : UNC; ctx.fillRect(m[1] * sx, y - s, tw, rh); if (m[2] === 1) nm++; else nu++; }
   });
+  ctx.restore();
   if (sel && selGroup() === cg.id) { ctx.fillStyle = '#000'; ctx.fillRect(selCol() * sx + sx / 2 - .5, 0, 1, H); }
   // 1行目=コンティグ（コンセンサス）、2行目=構成配列。色の四角は概観図の線の色（凡例を兼ねる）
   const sw = (c, s) => `<span><i style="background:${c}"></i>${s}</span>`;   // 「■N等 0」の途中では改行しない
   const t = `${esc(cg.name)}（${cons.replace(/-/g, '').length} bp, ${sw(AMB, `N等 ${amb}）`)}<br>${cg.members.length}本（${sw(MIS, `不一致 ${nm}`)} ${sw(UNC, `N等 ${nu}）`)}`;
   if (ovwTxt !== t) $('ovwName').innerHTML = ovwTxt = t;
 }
+$('ovwScroll').addEventListener('scroll', req);
 $('ovwBox').addEventListener('mousedown', ev => {
-  const cg = ovContig(); if (!cg || ev.button !== 0) return; ev.preventDefault();
-  const rc = $('ovwBox').getBoundingClientRect(), sx = rc.width / cg.width, c = Math.max(0, Math.min(cg.width - 1, Math.floor((ev.clientX - rc.left) / sx)));
-  const k = Math.floor((ev.clientY - rc.top - 3) / ORH) - 1;
+  const cg = ovContig(), ov = $('ovwScroll'), rc = ov.getBoundingClientRect(), x = ev.clientX - rc.left, y = ev.clientY - rc.top;
+  if (!cg || ev.button !== 0 || x >= ov.clientWidth) return; ev.preventDefault();   // スクロールバーの上は除く
+  const sx = ov.clientWidth / cg.width, c = Math.max(0, Math.min(cg.width - 1, Math.floor(x / sx)));
+  const k = y < 3 + ovRH ? -1 : Math.floor((y - 3 + ov.scrollTop) / ovRH) - 1;
   if (k < 0 || k >= cg.members.length) return setSel('cons', cg.id, c, c, 'ovw');
   const r = S.reads[cg.members[k]]; let i = SA.nearestIdx(r, c), best = 6 / sx;   // 近く(6px以内)に不一致（赤）があればそれを選ぶ
   for (const m of mismatches(r, cg)) { if (m[2] !== 1) continue; const d = Math.abs(m[1] - c); if (d < best) { best = d; i = m[0]; } }
