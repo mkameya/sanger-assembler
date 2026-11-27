@@ -1,7 +1,10 @@
 # Sanger Assembler
 
 A single-file, browser-based tool to assemble, view and edit Sanger sequencing traces (.ab1).
-No installation, no server: your data never leaves your browser. The user interface is in Japanese, but it works with your browser's built-in translation.
+No installation, no server: your data never leaves your browser.
+
+The user interface is in Japanese, but it works with your browser's built-in translation.
+
 Try it with demo data: https://mkameya.github.io/sanger-assembler/?load=demo/demo.zip (then press "Assemble").
 
 Sangerシーケンスの波形ファイル（.ab1）を、ブラウザだけでアセンブル・表示・編集するツールです。
@@ -14,7 +17,7 @@ Sangerシーケンスの波形ファイル（.ab1）を、ブラウザだけで�
 - オンライン: https://mkameya.github.io/sanger-assembler/
 - オフライン: `index.html` をダウンロードして Chrome / Edge で開く。
 - デモ: https://mkameya.github.io/sanger-assembler/?load=demo/demo.zip
-  - 開いたら「Assemble」を押してください。約2.8 kb の断片をプラスミドに入れた2クローンを、両方向から読んだ .ab1 7本です（`demo/demo.zip`）。
+  - .ab1 7本が表示されるので「Assemble」を押してください。
   - 基準を「緩い」にすると、標準では結合しない 1-F1 も加わります。
 
 読み込んだ配列はブラウザの中だけで処理され、外部には送信されません。
