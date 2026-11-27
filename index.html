@@ -95,7 +95,7 @@ input[type=number]{width:52px}
   <div class="grp">
     <button id="bOpen" title="ab1 / FASTA / プロジェクト(.json)、またはそれらをまとめた zip を開く (Ctrl+O)">開く</button>
     <button id="bSave" title="作業状況を保存 (Ctrl+S)">Project保存</button>
-    <button id="bClose" title="選択した配列を一覧から削除（元のファイルは消えません。Ctrl+Zで戻せます）">配列を閉じる</button>
+    <button id="bClose" title="選択した配列を一覧から削除（元のファイルは消えない。Ctrl+Zで戻せる）">配列を閉じる</button>
     <input type="file" id="fIn" multiple style="display:none" accept=".ab1,.abi,.fasta,.fa,.fna,.fas,.ffn,.seq,.txt,.json,.zip">
   </div>
   <div class="grp">
@@ -124,9 +124,9 @@ input[type=number]{width:52px}
   </div>
   <div class="grp">
     <button id="bCopy" title="選択行の配列をクリップボードにコピー (Ctrl+C)。1行なら配列のみ、複数行はFASTA形式。行未選択なら選択中の塩基範囲">Copy</button>
-    <button id="bFasta" title="選択行（配列・コンセンサス）をFASTAで保存。未選択なら全コンセンサス（なければ全配列）">FASTA書き出し</button>
-    <label title="FASTA書き出し時に、トリムした低品質末端を除く"><input type="checkbox" id="ckTrim" checked>Trim部除く</label>
-    <button id="bAb1" title="選択した配列を編集内容を反映した .ab1 として別名保存">AB1書き出し</button>
+    <button id="bFasta" title="選択行（配列・コンセンサス）をFASTAで保存。未選択なら全コンセンサス（なければ全配列）">FASTA出力</button>
+    <label title="FASTA出力時に、トリムした低品質末端を除く"><input type="checkbox" id="ckTrim" checked>Trim部除く</label>
+    <button id="bAb1" title="選択した配列を編集内容を反映した .ab1 として別名保存">.ab1出力</button>
   </div>
   <div class="grp">
     <label>塩基幅</label><button data-z="cw-">−</button><button data-z="cw+">＋</button>
@@ -139,7 +139,7 @@ input[type=number]{width:52px}
   </div>
 </div>
 <div id="main">
-  <div id="ovwWrap" title="コンティグ全長の概観。赤=コンセンサスと不一致、灰=配列のN等（不一致に数えない）、橙=コンセンサスのN等、薄青=配列表示の表示範囲。N等=A・C・G・T以外の塩基（N・R・Y など）。クリックでその位置へ移動"><div id="ovwSide"><div id="ovwName"></div><button id="bOvwSvg" title="この概観図をSVGファイルに保存（配列名・向き・目盛り・凡例付き）">SVG保存</button></div><div id="ovwBox"><canvas id="ovw"></canvas><div class="ov" id="ovwScroll"><div id="ovwSp"></div></div></div></div>
+  <div id="ovwWrap" title="コンティグ全長の概観。赤=コンセンサスと不一致、灰=配列のN等（不一致に数えない）、橙=コンセンサスのN等、薄青=配列表示の表示範囲。N等=A・C・G・T以外の塩基（N・R・Y など）。クリックでその位置へ移動"><div id="ovwSide"><div id="ovwName"></div><button id="bOvwSvg" title="この概観図をSVGファイルに保存（配列名・向き・目盛り・凡例付き）">SVG出力</button></div><div id="ovwBox"><canvas id="ovw"></canvas><div class="ov" id="ovwScroll"><div id="ovwSp"></div></div></div></div>
   <div id="seqPane">
     <div id="names"></div>
     <div id="nmSplit" title="ドラッグで配列名の幅を変更（ダブルクリックで元の幅）"></div>
@@ -153,29 +153,28 @@ input[type=number]{width:52px}
 <div id="status">準備完了</div>
 <div id="drop">ここにドロップして開く</div>
 <div id="help">
-  <h3>選択</h3>
-  配列名クリックで行選択（<kbd>Ctrl</kbd>/<kbd>Shift</kbd>で複数）。塩基を選択中に同じコンティグの配列名をクリックすると、カーソルはその配列の同じ位置へ移る。配列名をドラッグで順番入れ替え（同じコンティグ内／未結合内、コンティグ行はコンティグ同士）。配列名・コンセンサス名のダブルクリック、または <kbd>F2</kbd> で名前を変更（<kbd>F2</kbd>は選択中の行、行選択がなければカーソルのある配列）。<br>
-  塩基クリックで塩基選択（ドラッグ／<kbd>Shift</kbd>+クリックで範囲）。<kbd>←</kbd><kbd>→</kbd>で移動、<kbd>Shift</kbd>で範囲拡張、<kbd>↑</kbd><kbd>↓</kbd>で隣の行、<kbd>Home</kbd>/<kbd>End</kbd>。<kbd>Ctrl</kbd>+<kbd>←</kbd><kbd>→</kbd>で同じ行の前・次の要確認箇所へ（配列行ではコンセンサスとの不一致・N等・欠けたギャップ、コンセンサス行ではN等とギャップ）。<kbd>Esc</kbd>で選択解除。
-  <b>ブロック選択</b>：コンティグ内で塩基をクリックし、別の行までドラッグ（または別の行を<kbd>Shift</kbd>+クリック）すると、複数行×同じカラム範囲を選択。<kbd>Delete</kbd>で一括削除、塩基キーで一括置換、<kbd>Ctrl+C</kbd>でFASTAコピー。
-  <h3>編集</h3>
-  塩基選択中に <kbd>A</kbd><kbd>C</kbd><kbd>G</kbd><kbd>T</kbd><kbd>N</kbd>（IUPAC文字も可）で置換／挿入（<kbd>Insert</kbd>で置換⇔挿入を切替）。1塩基の強調表示（カーソル）に打つと、置換・挿入どちらでも打った塩基がカーソルの左に来る（置換ではカーソルが右へ進む。続けて打てばその順に入る）。範囲を選択して打つと範囲全体がその塩基になり、選択は残る。配列内部のギャップ（-）もクリックで選択でき、塩基キーでそのカラムに塩基が入る（置換・挿入どちらのモードでも同じ。カーソルは右隣の塩基へ）。挿入は選択塩基の前に入る。<kbd>Shift</kbd>+塩基キーなら後ろに入る（末尾への追加用）。範囲（2塩基以上・ブロック）を選択中は <kbd>Delete</kbd>/<kbd>BackSpace</kbd> で範囲を削除。1塩基の強調表示はカーソルで、<kbd>Delete</kbd>＝カーソル位置の塩基を削除、<kbd>BackSpace</kbd>＝カーソルの左の塩基を削除（コンティグ内で左がギャップなら、飛ばして左の最寄りの塩基）。コンティグ内で削除した箇所はアラインメントを保ったままギャップになる。<kbd>-</kbd> はギャップの入力：置換モードでは塩基がギャップになる（削除と同じ。未結合の配列では塩基が消える）、挿入モードでは何もしない（全配列がギャップのカラムは残らないため。ギャップは位置調整モードで入れる）。<br>
-  <b>位置調整</b>（アラインメントの手動調整）：「位置調整」モードでは塩基は変わらず、選択した配列だけが動く。<kbd>-</kbd>/<kbd>Space</kbd>＝選択塩基の前にギャップを入れる（その配列の以降が右へ1カラム）、<kbd>Delete</kbd>/<kbd>BackSpace</kbd>＝選択塩基の直前のギャップを詰める（以降が左へ1カラム）。ギャップを別の位置へ移すには、元の位置で詰めてから移したい位置で入れる。配列の先頭塩基で行うと配列全体が左右に動く。このモードでは選択は位置（1カラム）だけで、ギャップが入る位置を紫の縦線で示す。別の行まで縦にドラッグ（または<kbd>Shift</kbd>+クリック）すると間の配列をまとめて、<kbd>Ctrl</kbd>+クリックで離れた配列を1本ずつ追加／解除して、複数配列を同時に動かせる（詰めるギャップがない配列はそのまま）。<br>
-  挿入モードでは、塩基が入る位置を緑の縦線で示す（<kbd>Shift</kbd>を押している間は後ろ側）。<br>
-  コンセンサス行の塩基は置換のみ可能。配列の編集は該当カラムのコンセンサスに自動反映、全体の再計算は「Consensus更新」。<br>
-  <kbd>Ctrl+C</kbd> コピー（コンセンサス名や配列名をクリックして行選択→1行なら配列のみ、複数行はFASTA。行未選択なら選択中の塩基範囲）。<br>
-  <kbd>Ctrl+Z</kbd> 元に戻す／<kbd>Ctrl+Y</kbd> やり直し／<kbd>Ctrl+S</kbd> プロジェクト保存／<kbd>Ctrl+O</kbd> ファイルを開く。
-  <h3>波形</h3>
-  ホイール=縦スクロール、<kbd>Shift</kbd>+ホイール（横ホイール・タッチ画面で左右になぞる）=選択中グループ（コンティグは全リード連動）を横移動、下のスライダーも同じ。<kbd>Ctrl</kbd>+ホイール=横ズーム、<kbd>Alt</kbd>+ホイール=縦(振幅)ズーム。
-  <h3>検索・配列の追加</h3>
-  <kbd>Ctrl+F</kbd> で検索欄へ。塩基配列を入力して <kbd>Enter</kbd> で次、<kbd>Shift+Enter</kbd> で前の一致へ移動（全配列とコンセンサスが対象、相補鎖側の一致も検索、R・Y・N などのあいまい文字可）。<br>
-  配列はいつでも追加で開けます（未結合に入る）。.ab1 / FASTA / プロジェクトを zip にまとめたものも、そのまま開けます（中のフォルダも含めて展開。パスワード付き zip は不可）。既存コンティグへ加えるには、追加した配列とコンティグ行を選択してアセンブル。
+  <h3>使用できるデータ</h3>
+  .ab1 / FASTA / プロジェクト(.json)、これらを zip にまとめたものを開ける（中のフォルダも含めて展開。パスワード付き zip は不可）。配列はいつでも追加可能。既存コンティグへ加えるには、追加した配列とコンティグ行を選択してアセンブル。
   <h3>概観（不一致マップ）</h3>
-  コンティグがあると最上段に全長の概観を表示（最後に操作したコンティグ）。N等＝A・C・G・T 以外の塩基（N や R・Y などのあいまい塩基）。各配列の帯の上の赤い線がコンセンサスとの不一致、薄い灰色の線が配列のN等（判定できないので不一致に数えない）、コンセンサス帯の橙がコンセンサスのN等（僅差で一つに決まらなかった位置）。コンセンサスがあいまい塩基のとき、それと両立する塩基（R に対する A・G など）は不一致にしない。左の1行目はコンティグ名・全長（ギャップを除いたコンセンサスの長さ）・コンセンサスのN等の数、2行目は構成配列の本数・不一致の数・配列のN等の数（配列ごとの合計）。色の四角は概観図の線の色。クリックすると配列表示・波形表示がその位置へ移動（赤線の近くをクリックするとその塩基を選択）。「SVG保存」で、配列名・目盛り・凡例付きの図として保存。配列が多いと行を細くし、それでも入りきらなければ縦にスクロールする（コンセンサスの行は固定。選んだ配列が隠れていれば、その行が見える位置まで動く）。
-  <h3>表示</h3>
-  配列名の前の <span style="color:#1c6fd1">▶</span>=読み込み時の向き、<span style="color:#d9480f">◀</span>=相補鎖にした配列。FASTA由来の配列（波形なし）は波形エリアに表示しません。<br>
+  選択したコンティグ全長の概観を最上段に表示。N等＝A・C・G・T 以外の塩基（N や R・Y など）。コンセンサス帯の橙がコンセンサスのN等（一つに決まらなかった塩基）、各配列の帯の上の赤い線がコンセンサスとの不一致、薄い灰色の線がN等。クリックすると配列表示・波形表示が対応位置へ移動。「SVG出力」で図として保存。
+  <h3>配列表示</h3>
   赤背景=コンセンサスと不一致、灰背景=配列のN等（概観図と同じ判定）、黄背景=Q&lt;20、灰色文字=トリム部（アセンブルとコンセンサスに不使用）、下線=手動編集した塩基。
+  <h3>配列選択</h3>
+  配列名クリックで行選択（<kbd>Ctrl</kbd>/<kbd>Shift</kbd>で複数）。配列名をドラッグで順番入れ替え。配列名・コンセンサス名のダブルクリック、または <kbd>F2</kbd> で名前変更。
+  <h3>塩基選択</h3>
+  クリックで単独塩基選択。<kbd>←</kbd><kbd>→</kbd>で移動、<kbd>Ctrl</kbd>+<kbd>←</kbd><kbd>→</kbd>で前・次のマーク箇所へ（コンセンサス行ではN等とギャップ、個別配列行ではコンセンサスとの不一致も含む）。<br>
+  ドラッグ、<kbd>Shift</kbd>+クリックで範囲（複数行ならブロック）選択。<kbd>Esc</kbd>で選択解除。<kbd>Delete</kbd>/<kbd>BackSpace</kbd>で一括削除、塩基キーで一括置換。
+  <h3>編集</h3>
+  塩基選択中に <kbd>A</kbd><kbd>C</kbd><kbd>G</kbd><kbd>T</kbd><kbd>N</kbd>（IUPAC文字も可）で置換／挿入（<kbd>Insert</kbd>で置換⇔挿入を切替）。挿入モードではカーソル前に入る。<kbd>Shift</kbd>+塩基キーならカーソル後に入る（末尾への追加用）。<kbd>Delete</kbd>＝カーソル位置、<kbd>BackSpace</kbd>＝カーソル前の塩基を削除。コンティグ内での削除は、アラインメントを保ったままギャップになる。<kbd>-</kbd> はギャップの入力（置換モード；挿入モードでは何もしない）。<br>
+  <b>アラインメントの手動調整</b>：「位置調整」モードでは配列を移動可能。<kbd>-</kbd>/<kbd>Space</kbd>＝カーソル前にギャップを挿入、<kbd>Delete</kbd>/<kbd>BackSpace</kbd>＝カーソル前のギャップを詰める。<kbd>Shift</kbd> または<kbd>Ctrl</kbd>+クリックでの追加／解除で、複数配列を同時に動かせる。<br>
+  <kbd>Ctrl+C</kbd> コピー（1行選択時は配列のみ、複数行選択時はFASTA。行未選択なら選択中の塩基範囲）。<br>
+  <kbd>Ctrl+Z</kbd> 元に戻す／<kbd>Ctrl+Y</kbd> やり直し／<kbd>Ctrl+S</kbd> プロジェクト保存／<kbd>Ctrl+O</kbd> ファイルを開く。
+  <h3>検索</h3>
+  <kbd>Ctrl+F</kbd> で検索欄へ。塩基配列を入力して <kbd>Enter</kbd> で次、<kbd>Shift+Enter</kbd> で前の一致へ移動（全配列とコンセンサスが対象、相補鎖側の一致も検索、R・Y・N などのあいまい文字可）。
+  <h3>波形表示</h3>
+  ホイール=縦スクロール、<kbd>Shift</kbd>+ホイール=選択配列（コンティグは全リード連動）を横移動（横ホイール・左右スワイプでも可。画面下部のスライダーも同じ）。<kbd>Ctrl</kbd>+ホイール=横ズーム、<kbd>Alt</kbd>+ホイール=縦(振幅)ズーム。
   <h3>保存</h3>
-  プロジェクト(.json)は元の.ab1データを内包するので、1ファイルで再開できます。AB1書き出しは PBAS/PLOC/PCON（相補鎖にした配列は波形も）を書き換えた別名ファイルを作ります。
+  「Project保存」ボタン（<kbd>Ctrl+S</kbd>）で作業状態を .json ファイルに保存（.ab1 などすべてのデータを含む）。
 </div>
 
 <script id="core">
@@ -1351,10 +1350,10 @@ function delSel() {
   const [a, b] = selRange(), r = S.reads[sel.id]; if (b - a + 1 >= r.seq.length) return status('配列全体は削除できません（「配列を閉じる」を使用）');
   pushUndo(); SA.editDelete(S, sel.id, a, b); const n = S.reads[sel.id].seq.length; sel.a = sel.b = Math.min(a, n - 1); afterEdit();
 }
-/* Ctrl+←→: 同じ行の前・次の要確認箇所へ。配列＝概観図の印（不一致・N等・コンセンサスに塩基があるのに欠けたギャップ）＋配列自身の N等、
+/* Ctrl+←→: 同じ行の前・次のマーク箇所へ。配列＝概観図の印（不一致・N等・コンセンサスに塩基があるのに欠けたギャップ）＋配列自身の N等、
    コンセンサス＝A・C・G・T 以外（N等とギャップ）、未結合の配列＝トリム部を除く N等。配列中のギャップすべてには止まらない（他の配列もギャップの正常な箇所が多いため） */
 function jumpMark(d) {
-  if (!sel) return status('塩基を選択してから Ctrl+←→ で前・次の要確認箇所へ移動します');
+  if (!sel) return status('塩基を選択してから Ctrl+←→ で前・次のマーク箇所へ移動します');
   const cur = selCol(), marks = [];   // [塩基添字（コンセンサスはカラム）, カラム, ギャップか]（カラム昇順）
   if (sel.kind === 'cons') { const cons = SA.getContig(S, sel.id).cons; for (let c = 0; c < cons.length; c++) if (!'ACGT'.includes(cons[c])) marks.push([c, c, false]); }
   else {
@@ -1365,10 +1364,10 @@ function jumpMark(d) {
     marks.sort((x, y) => x[1] - y[1]);
   }
   const m = d > 0 ? marks.find(x => x[1] > cur) : marks.slice().reverse().find(x => x[1] < cur);
-  if (!m) return status(d > 0 ? 'これより右に要確認箇所（不一致・N等・欠けたギャップ）はありません' : 'これより左に要確認箇所（不一致・N等・欠けたギャップ）はありません');
+  if (!m) return status(d > 0 ? 'これより右にマーク箇所（不一致・N等・欠けたギャップ）はありません' : 'これより左にマーク箇所（不一致・N等・欠けたギャップ）はありません');
   setSel(sel.kind, sel.id, m[0], m[0], 'key');
   if (m[2] && mode !== 'aln') { sel.gap = m[1]; tc[activeG] = m[1]; }   // 欠けたギャップはギャップを選ぶ（位置調整モードはギャップを選べないので右隣の塩基）
-  status(`要確認 ${marks.indexOf(m) + 1} / ${marks.length} ─ ` + selInfo()); req();
+  status(`マーク箇所 ${marks.indexOf(m) + 1} / ${marks.length} ─ ` + selInfo()); req();
 }
 function moveSel(d, ext) {
   if (!sel) return; const max = (sel.kind === 'cons' ? SA.getContig(S, sel.id).width : S.reads[sel.id].seq.length) - 1;
@@ -1639,7 +1638,7 @@ $('bFasta').onclick = async () => {
   const list = pickSeqs(true), n = list.length;
   if (!n) return status('書き出す配列がありません');
   const h = await saveAs(new Blob([list.map(x => SA.fastaOf(x.name, x.seq)).join('')], { type: 'text/plain' }), (n === 1 ? list[0].name : 'sequences') + '.fasta', 'FASTA', '.fasta');
-  if (h) status(n + ' 配列をFASTAで書き出しました');
+  if (h) status(n + ' 配列をFASTAで出力しました');
 };
 async function copyText(text) {
   try { await navigator.clipboard.writeText(text); return true; } catch (e) {
@@ -1660,13 +1659,13 @@ async function doCopy() {
 $('bCopy').onclick = doCopy;
 $('bAb1').onclick = async () => {
   const rs = targetReads().map(id => S.reads[id]).filter(r => r.ab1);
-  if (!rs.length) return status('AB1として書き出す配列（.ab1由来）を選択してください');
+  if (!rs.length) return status('.ab1 として出力する配列（.ab1由来）を選択してください');
   let n = 0;
   for (const r of rs) {
     const blob = new Blob([SA.exportAb1(r)], { type: 'application/octet-stream' }), name = r.name + (r.rc ? '_comp' : '') + '_edited.ab1';
     if (rs.length === 1) { if (await saveAs(blob, name, 'ABIF', '.ab1')) n++; } else { download(blob, name); n++; await new Promise(res => setTimeout(res, 300)); }
   }
-  if (n) status(n + ' 本を .ab1 で書き出しました');
+  if (n) status(n + ' 本を .ab1 で出力しました');
 };
 window.addEventListener('beforeunload', ev => { if (dirty) { ev.preventDefault(); ev.returnValue = ''; } });
 
